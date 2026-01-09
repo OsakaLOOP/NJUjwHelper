@@ -171,7 +171,7 @@ class NJUCourseClient:
 
     def _get_campus_display(self, code):
         """辅助：补全后端强制要求的 value_display"""
-        mapping = {"1": "鼓楼校区", "2": "仙林校区", "3": "苏州校区", "4": "浦口校区"}
+        mapping = {"1": "鼓楼校区", "2": "浦口校区", "3": "仙林校区", "4": "苏州校区"}
         return mapping.get(code, "未知校区")
 
     def search(self, course_name=None, course_code=None, campus="1", semester="2025-2026-1", match_mode="OR"):

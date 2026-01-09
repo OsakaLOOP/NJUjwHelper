@@ -22,6 +22,13 @@ createApp({
         const currentWeek = ref(1);
         const toastRef = ref(null);
 
+        // Import Modal State
+        const showImportModal = ref(false);
+        const importText = ref('');
+        const isImporting = ref(false);
+        const importStatus = ref('');
+        const importParams = reactive({ semester: '2025-2026-1', campus: '1' });
+
         // --- Computed ---
 
         const filteredSearchResults = computed(() => {
@@ -44,20 +51,25 @@ createApp({
             }
         };
 
+        const fetchCourses = async (params) => {
+            if (window.pywebview) {
+                return await window.pywebview.api.search(params);
+            } else {
+                // Mock
+                await new Promise(r => setTimeout(r, 300));
+                // Simple mock logic
+                if (params.code === 'MISSING') return [];
+                return [
+                    { name: '高等数学', code: params.code || '001', teacher: '张三', location_text: '周一 1-2节 1-16周', checked: false, schedule_bitmaps: Array(26).fill(3) },
+                    { name: '高等数学', code: params.code || '001', teacher: '李四', location_text: '周二 3-4节 1-16周', checked: false, schedule_bitmaps: Array(26).fill(12) }
+                ];
+            }
+        };
+
         const doSearch = async () => {
             loading.value = true;
             try {
-                let res;
-                if (window.pywebview) {
-                    res = await window.pywebview.api.search(searchParams);
-                } else {
-                    // Mock
-                    await new Promise(r => setTimeout(r, 500));
-                    res = [
-                        { name: '高等数学', code: '001', teacher: '张三', location_text: '周一 1-2节 1-16周', checked: false, schedule_bitmaps: Array(26).fill(3) },
-                        { name: '高等数学', code: '001', teacher: '李四', location_text: '周二 3-4节 1-16周', checked: false, schedule_bitmaps: Array(26).fill(12) }
-                    ];
-                }
+                const res = await fetchCourses(searchParams);
                 // Initialize checked as FALSE
                 searchResults.value = res.map(c => ({ ...c, checked: false }));
                 hasSearched.value = true;
@@ -75,6 +87,98 @@ createApp({
 
             const allChecked = visible.every(c => c.checked);
             visible.forEach(c => c.checked = !allChecked);
+        };
+
+        // --- Import Logic ---
+
+        const openImportModal = () => {
+            showImportModal.value = true;
+            importText.value = '';
+            importStatus.value = '';
+        };
+
+        const closeImportModal = () => {
+            if (isImporting.value) return;
+            showImportModal.value = false;
+        };
+
+        const startBatchImport = async () => {
+            if (!importText.value) return showToast("请粘贴内容");
+            isImporting.value = true;
+            importStatus.value = "正在解析...";
+
+            const lines = importText.value.split('\n');
+            const validCodes = [];
+
+            // Pattern: 6+ digits, optional suffix letter
+            const codePattern = /^\d{6,}[A-Za-z]?$/;
+
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+                // Split by spaces/tabs
+                const parts = line.split(/\s+/);
+
+                // Strategy:
+                // 1. If parts[0] is "查看", look at parts[1]
+                // 2. Else look at parts[0]
+                let candidate = parts[0];
+                if (parts[0] === '查看' && parts.length > 1) {
+                    candidate = parts[1];
+                }
+
+                if (codePattern.test(candidate)) {
+                    validCodes.push(candidate);
+                }
+            }
+
+            if (validCodes.length === 0) {
+                importStatus.value = "未找到有效的课程编号";
+                isImporting.value = false;
+                return;
+            }
+
+            importStatus.value = `找到 ${validCodes.length} 个课程，开始获取...`;
+            let successCount = 0;
+            let failCount = 0;
+
+            for (let i = 0; i < validCodes.length; i++) {
+                const code = validCodes[i];
+                importStatus.value = `[${i+1}/${validCodes.length}] 正在搜索 ${code}...`;
+
+                try {
+                    const res = await fetchCourses({
+                        code: code,
+                        semester: importParams.semester,
+                        campus: importParams.campus,
+                        match_mode: 'OR' // irrelevant for code search usually
+                    });
+
+                    if (res && res.length > 0) {
+                        // Create Group
+                         const candidates = res.map(c => ({
+                            ...c,
+                            selected: true // Auto select all for imported groups
+                        }));
+                        groups.value.push({
+                            id: Date.now() + i, // unique-ish id
+                            open: false,
+                            candidates: candidates
+                        });
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (e) {
+                    console.error("Import error for " + code, e);
+                    failCount++;
+                }
+            }
+
+            showToast(`导入完成: 成功 ${successCount} 个, 未找到 ${failCount} 个`);
+            isImporting.value = false;
+            showImportModal.value = false;
+            currentView.value = 'planning'; // Switch to view
         };
 
         const createGroup = () => {
@@ -228,7 +332,9 @@ createApp({
             filterText, hasSearched, filteredSearchResults,
             doSearch, createGroup, getGroupName, getActiveCount, toggleCandidate, removeGroup,
             generateSchedules, getCell, downloadImage, saveSession, newSession, toastRef,
-            toggleSelectAll
+            toggleSelectAll,
+            showImportModal, importText, isImporting, importStatus, importParams,
+            openImportModal, closeImportModal, startBatchImport
         };
     }
 }).mount('#app');
