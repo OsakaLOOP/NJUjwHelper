@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NJU 选课助手</title>
+    <title>🐋南哪选课助手</title>
     <script src="vue.global.js"></script>
     <script src="html2canvas.min.js"></script>
     <style>
@@ -49,7 +49,7 @@
 <body>
     <div id="app">
         <header>
-            <h1>NJU 选课助手 <span v-if="groups.length > 0" style="font-size: 0.8em; margin-left: 10px; font-weight: normal;">当前组数: {{ groups.length }}</span></h1>
+            <h1>🐋南哪选课助手 <span v-if="groups.length > 0" style="font-size: 0.8em; margin-left: 10px; font-weight: normal;">当前组数: {{ groups.length }}</span></h1>
             <div>
                 <button @click="saveSession" class="secondary" style="margin-right: 10px;">保存进度</button>
                 <button @click="newSession" class="danger">重置</button>
@@ -66,21 +66,50 @@
             <!-- View 1: Search -->
             <div v-show="currentView==='search'" class="card">
                 <h2>添加备选课程组</h2>
-                <div class="search-grid">
-                    <div style="display: flex; gap: 5px;">
-                        <input v-model="searchParams.name" placeholder="课程名 (空格分隔多词)" style="flex: 1;">
-                        <select v-model="searchParams.match_mode" style="width: auto;">
-                            <option value="OR">任意 (OR)</option>
-                            <option value="AND">全部 (AND)</option>
-                        </select>
-                    </div>
-                    <input v-model="searchParams.code" placeholder="课程号">
-                    <select v-model="searchParams.campus">
-                        <option value="1">鼓楼</option>
-                        <option value="2">仙林</option>
+                <div class="search-grid" style="display: flex; width: 100%; gap: 5; align-items: stretch;">
+                    <input 
+                        v-model="searchParams.name" 
+                        placeholder="课程名 (空格分隔多词)" 
+                        style="flex: 1; min-width: 0; box-sizing: border-box;"
+                    >
+
+                    <select 
+                        v-model="searchParams.match_mode" 
+                        style="width: auto; flex-shrink: 0; box-sizing: border-box;"
+                    >
+                        <option value="OR">OR</option>
+                        <option value="AND">AND</option>
                     </select>
-                    <input v-model="searchParams.semester" placeholder="学期 (如 2025-2026-1)">
-                    <button @click="doSearch" :disabled="loading">{{ loading ? '搜索中...' : '搜索' }}</button>
+
+                    <input 
+                        v-model="searchParams.code" 
+                        placeholder="课程号" 
+                        style="width: 15ch; flex-shrink: 0; box-sizing: border-box;"
+                    >
+
+                    <select 
+                        v-model="searchParams.campus" 
+                        style="width: auto; flex-shrink: 0; box-sizing: border-box;"
+                    >
+                        <option value="1">鼓楼</option>
+                        <option value="2">浦口</option>
+                        <option value="3">仙林</option>
+                        <option value="4">苏州</option>
+                    </select>
+
+                    <input 
+                        v-model="searchParams.semester" 
+                        placeholder="学期" 
+                        style="width: 15ch; flex-shrink: 0; box-sizing: border-box;"
+                    >
+
+                    <button 
+                        @click="doSearch" 
+                        :disabled="loading" 
+                        style="flex-shrink: 0; white-space: nowrap; box-sizing: border-box;"
+                    >
+                        {{ loading ? '...' : '搜索' }}
+                    </button>
                 </div>
 
                 <div v-if="hasSearched">

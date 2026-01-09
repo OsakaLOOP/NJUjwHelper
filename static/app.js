@@ -200,7 +200,7 @@ createApp({
         const init = async () => {
             if (window.pywebview) {
                 try {
-                    const data = await window.pywebview.api.load_session();
+                    const data = await window.pywebview.api.load_session('last_session');
                     if (data) {
                         if (data.groups) groups.value = data.groups;
                         if (data.preferences) Object.assign(preferences, data.preferences);

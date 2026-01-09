@@ -33,8 +33,10 @@ class SessionManager:
         """Loads a session from a JSON file."""
         filepath = self._get_filepath(filename)
         if not os.path.exists(filepath):
+            print(f"[SessionMan] Session file not found: {filepath}")
             return None
         with open(filepath, "r", encoding="utf-8") as f:
+            print(f"[SessionMan] Loaded session from: {filepath}")
             return json.load(f)
 
     def list_sessions(self):

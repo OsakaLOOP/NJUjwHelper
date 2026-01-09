@@ -77,15 +77,6 @@ class Api:
             print(f"[Api] Save Error: {e}")
             return False
 
-    def load_session(self):
-        try:
-            data = self.session_manager.load_session("last_session")
-            print(f"[Api] Loaded session: {data is not None}")
-            return data
-        except Exception as e:
-            print(f"[Api] Load Error: {e}")
-            return None
-
 if __name__ == "__main__":
     api = Api()
 
@@ -94,7 +85,7 @@ if __name__ == "__main__":
     html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static/index.html')
 
     window = webview.create_window(
-        'NJU 选课助手',
+        '🐋南哪选课助手',
         url=html_path,
         js_api=api,
         width=1200, height=800
