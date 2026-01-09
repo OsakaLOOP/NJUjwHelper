@@ -53,14 +53,19 @@ createApp({
         };
 
         const createGroup = () => {
-            const selected = searchResults.value.filter(c => c.checked);
-            if (selected.length === 0) return showToast("未选择任何课程");
+            const selectedInSearch = searchResults.value.filter(c => c.checked);
+            if (selectedInSearch.length === 0) return showToast("未选择任何课程");
+
+            // Copy all search results, map checked to selected
+            const candidates = searchResults.value.map(c => ({
+                ...c,
+                selected: c.checked
+            }));
 
             groups.value.push({
                 id: Date.now(),
                 open: false,
-                candidates: selected, // Store full objects
-                selected_indices: selected.map((_, i) => i) // Default all active
+                candidates: candidates
             });
             searchResults.value = [];
             currentView.value = 'planning';
@@ -68,16 +73,26 @@ createApp({
         };
 
         const getGroupName = (group) => {
-            if (group.candidates.length > 0) return group.candidates[0].name;
+            // Find first selected one to name the group, or just the first one
+            const first = group.candidates.find(c => c.selected) || group.candidates[0];
+            if (first) return first.name;
             return "未知课程";
         };
 
-        const getActiveCount = (group) => group.selected_indices.length;
+        const getActiveCount = (group) => group.candidates.filter(c => c.selected).length;
 
         const toggleCandidate = (group, idx) => {
-            const i = group.selected_indices.indexOf(idx);
-            if (i > -1) group.selected_indices.splice(i, 1);
-            else group.selected_indices.push(idx);
+           // No-op here if using v-model, but let's keep it or remove it.
+           // Since we switch to v-model in the template, this function might become obsolete
+           // OR we can keep it if we want to programmatically toggle.
+           // But the previous implementation used indices.
+           // The template currently calls it. I will update the template to use v-model.
+           // So I can remove this function or just leave a placeholder.
+           // Actually, let's just make it toggle the boolean for the candidate at that index if needed,
+           // but v-model is cleaner. I'll remove it from the return object if I don't use it.
+           // But to be safe, I'll update it to toggle boolean.
+           const c = group.candidates[idx];
+           if (c) c.selected = !c.selected;
         };
 
         const removeGroup = (idx) => groups.value.splice(idx, 1);

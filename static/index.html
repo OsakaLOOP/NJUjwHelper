@@ -109,8 +109,7 @@
                     <div :class="['group-body', group.open ? 'open' : '']">
                         <label v-for="(course, cIdx) in group.candidates" :key="cIdx" class="result-item">
                             <input type="checkbox"
-                                   :checked="group.selected_indices.includes(cIdx)"
-                                   @change="toggleCandidate(group, cIdx)">
+                                   v-model="course.selected">
                             <div>
                                 {{ course.name }} - {{ course.teacher }} <br>
                                 <small>{{ course.location_text }}</small>

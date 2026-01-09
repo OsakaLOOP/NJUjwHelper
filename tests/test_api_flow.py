@@ -30,8 +30,7 @@ class TestApiFlow(unittest.TestCase):
         # Dummy groups
         groups = [{
             'id': 1,
-            'candidates': [{'name': 'A', 'schedule_bitmaps': [0, 3]}],
-            'selected_indices': [0]
+            'candidates': [{'name': 'A', 'schedule_bitmaps': [0, 3], 'selected': True}],
         }]
         prefs = {'avoid_early_morning': False}
 

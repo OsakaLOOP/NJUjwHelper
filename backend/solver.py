@@ -19,8 +19,8 @@ class ScheduleSolver:
                 group_b = groups[j]
 
                 # Get active candidates
-                cands_a = [c for idx, c in enumerate(group_a['candidates']) if idx in group_a['selected_indices']]
-                cands_b = [c for idx, c in enumerate(group_b['candidates']) if idx in group_b['selected_indices']]
+                cands_a = [c for c in group_a['candidates'] if c.get('selected', False)]
+                cands_b = [c for c in group_b['candidates'] if c.get('selected', False)]
 
                 if not cands_a or not cands_b:
                     continue # Empty group cannot conflict
@@ -67,7 +67,7 @@ class ScheduleSolver:
         # Prepare list of lists of candidates
         candidate_lists = []
         for g in groups:
-            active = [c for idx, c in enumerate(g['candidates']) if idx in g['selected_indices']]
+            active = [c for c in g['candidates'] if c.get('selected', False)]
             if not active:
                 return [] # If any group has no active candidates, no solution possible
             candidate_lists.append(active)
