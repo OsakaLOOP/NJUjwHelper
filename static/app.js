@@ -90,8 +90,7 @@ createApp({
             groups.value.push({
                 id: Date.now(),
                 open: false,
-                candidates: JSON.parse(JSON.stringify(selected)),
-                selected_indices: selected.map((_, i) => i)
+                candidates: JSON.parse(JSON.stringify(candidates))
             });
             // Uncheck after adding
             searchResults.value.forEach(c => c.checked = false);
