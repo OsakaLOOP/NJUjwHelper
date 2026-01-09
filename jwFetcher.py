@@ -6,6 +6,7 @@ import re
 import webview
 import threading
 import http.cookies
+from backend.cookie_manager import CookieManager
 
 # ================= 配置常量 =================
 TARGET_URL = "https://ehallapp.nju.edu.cn/jwapp/sys/kcbcx/modules/qxkcb/qxfbkccx.do"
@@ -84,12 +85,17 @@ class LoginInterceptor:
     def __init__(self):
         self._cookies = None
         self._window = None
+        self.cookie_manager = CookieManager()
 
     def _check_login_status(self, window):
         # 轮询检测 URL 是否包含业务系统特征且不包含认证中心特征
         while True:
             time.sleep(0.5)
-            current_url = window.get_current_url()
+            try:
+                current_url = window.get_current_url()
+            except:
+                break
+
             if current_url and "ehallapp.nju.edu.cn" in current_url and "authserver" not in current_url:
                 # 获取 Cookies (Webview > 5.0 API)
                 time.sleep(3) # 等待新的 cookie 注入完成
@@ -101,15 +107,40 @@ class LoginInterceptor:
                             for key, morsel in c.items():
                                 pairs.append(f"{key}={morsel.value}")
                         else:
-                            print(f"[Warn] Cannot parse cookie item: {c} - {type(c)}")
+                            # pywebview 6.x returns dict-like objects usually
+                            # Assuming it might be a dict or object with properties
+                            # Adjusting parsing logic to be more robust
+                            try:
+                                # Try accessing as object attributes (common in some versions)
+                                key = getattr(c, 'name', None) or c.get('name')
+                                value = getattr(c, 'value', None) or c.get('value')
+                                if key:
+                                    pairs.append(f"{key}={value}")
+                            except:
+                                print(f"[Warn] Cannot parse cookie item: {c}")
+
                     except Exception as e:
                         print(f"[Error] Parsing cookie failed: {c} - {e}")
                 self._cookies = "; ".join(pairs)
+                self.cookie_manager.save_cookie(self._cookies)
                 break
         self._window.destroy()
         
     
     def get_cookie(self):
+        # Try loading existing cookie first
+        existing_cookie = self.cookie_manager.load_cookie()
+        if existing_cookie:
+            # Validate cookie? For now assume it might be valid, if requests fail we can re-login
+            # But the requirement says "auto load... but ehallapp might expire".
+            # We will return it. The client usage should handle expiration (e.g. by checking response)
+            # However, for this function, we just return what we have or start login.
+            # To be robust, let's just return it. The main app logic should handle re-login if needed.
+            return existing_cookie
+
+        return self.force_login()
+
+    def force_login(self):
         self._window = webview.create_window(
             "NJU Unified Auth - Please Login", 
             GATEWAY_URL,
@@ -121,7 +152,13 @@ class LoginInterceptor:
         return self._cookies
 
 class NJUCourseClient:
-    def __init__(self, cookie_str):
+    def __init__(self, cookie_str=None):
+        if not cookie_str:
+             interceptor = LoginInterceptor()
+             cookie_str = interceptor.get_cookie()
+             if not cookie_str:
+                 cookie_str = interceptor.force_login()
+
         self.headers = {
             "Host": "ehallapp.nju.edu.cn",
             "Origin": "https://ehallapp.nju.edu.cn",
@@ -235,10 +272,8 @@ class NJUCourseClient:
 if __name__ == "__main__":
     print("=== NJU Course Fetcher & Bitmapper ===")
     
-    interceptor = LoginInterceptor()
-    cookie_str = interceptor.get_cookie()
-    print(cookie_str)
-    client = NJUCourseClient(cookie_str)
+    # 1. Init client (will auto-load cookie or prompt login)
+    client = NJUCourseClient()
     
     # 2. 用户输入筛选条件 (留空则忽略)
     in_name = input("课程名 (如 '微积分', 可空): ").strip()

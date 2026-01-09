@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-01-09T12:26:45.250661",
+  "groups": [
+    {
+      "id": 1,
+      "courses": []
+    }
+  ],
+  "preferences": {
+    "avoid_early": true
+  }
+}
