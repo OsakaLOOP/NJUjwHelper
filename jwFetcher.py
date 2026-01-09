@@ -187,7 +187,25 @@ class NJUCourseClient:
         
         # --- 动态参数 ---
         if course_name:
-            query_list.append({"name": "KCM", "caption": "课程名", "linkOpt": "AND", "builderList": "cbl_String", "builder": "include", "value": course_name})
+            names = course_name.split()
+            if len(names) > 1:
+                # 多关键词 OR 查询
+                # 结构: [[{name: KCM, value: A, linkOpt: AND}, {name: KCM, value: B, linkOpt: OR}, ...]]
+                kcm_group = []
+                for i, name in enumerate(names):
+                    opt = "AND" if i == 0 else "OR"
+                    kcm_group.append({
+                        "name": "KCM",
+                        "caption": "课程名",
+                        "linkOpt": opt,
+                        "builderList": "cbl_String",
+                        "builder": "include",
+                        "value": name
+                    })
+                query_list.append([kcm_group])
+            else:
+                # 单关键词保持原样
+                query_list.append({"name": "KCM", "caption": "课程名", "linkOpt": "AND", "builderList": "cbl_String", "builder": "include", "value": course_name})
         
         if course_code:
             query_list.append({"name": "KCH", "caption": "课程号", "linkOpt": "AND", "builderList": "cbl_String", "builder": "include", "value": course_code})
