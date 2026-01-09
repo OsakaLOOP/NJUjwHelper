@@ -24,7 +24,8 @@ class Api:
             results = self.client.search(
                 course_name=params.get('name'),
                 course_code=params.get('code'),
-                campus=params.get('campus', '1')
+                campus=params.get('campus', '1'),
+                semester=params.get('semester', '2025-2026-1')
             )
             return results
         except Exception as e:

@@ -14,9 +14,17 @@ class TestApiFlow(unittest.TestCase):
         self.mock_client_instance.search.return_value = [{'name': 'Math', 'code': '001'}]
 
         # Test Search
-        res = self.api.search({'name': 'Math'})
+        res = self.api.search({'name': 'Math', 'semester': '2025-2026-1'})
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]['name'], 'Math')
+
+        # Verify passed arguments
+        self.mock_client_instance.search.assert_called_with(
+            course_name='Math',
+            course_code=None,
+            campus='1',
+            semester='2025-2026-1'
+        )
 
     def test_generate_flow(self):
         # Dummy groups
