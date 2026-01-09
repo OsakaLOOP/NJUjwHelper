@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NJU 选课助手</title>
+    <script src="vue.global.js"></script>
+    <script src="html2canvas.min.js"></script>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; margin: 0; padding: 0; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header { background: #6200ea; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { margin: 0; font-size: 1.2rem; }
+        button { background: #03dac6; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        button.secondary { background: #ccc; }
+        button.danger { background: #b00020; color: white; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+
+        /* Navigation */
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .nav-tab { padding: 10px 20px; background: #ddd; border-radius: 4px; cursor: pointer; }
+        .nav-tab.active { background: #6200ea; color: white; }
+
+        /* Search */
+        .search-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 10px; }
+        input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
+        .results-list { max-height: 400px; overflow-y: auto; margin-top: 10px; }
+        .result-item { border-bottom: 1px solid #eee; padding: 10px; display: flex; align-items: start; gap: 10px; }
+
+        /* Groups */
+        .group-item { border: 1px solid #ddd; margin-bottom: 10px; border-radius: 4px; overflow: hidden; }
+        .group-header { background: #f0f0f0; padding: 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .group-body { padding: 10px; display: none; }
+        .group-body.open { display: block; }
+
+        /* Timetable */
+        .timetable { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; }
+        .timetable th, .timetable td { border: 1px solid #ddd; padding: 5px; text-align: center; font-size: 0.85rem; height: 40px; }
+        .timetable th { background: #f9f9f9; }
+        .cell-active { background-color: #bbdefb; color: #0d47a1; font-size: 0.75rem; border-radius: 2px; }
+        .cell-conflict { background-color: #ffcdd2; color: #b71c1c; }
+
+        /* Toast */
+        .toast { position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 10px 20px; border-radius: 4px; z-index: 1000; display: none; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>NJU 选课助手</h1>
+            <div>
+                <button @click="saveSession" class="secondary" style="margin-right: 10px;">保存进度</button>
+                <button @click="newSession" class="danger">重置</button>
+            </div>
+        </header>
+
+        <div class="container">
+            <div class="nav-tabs">
+                <div :class="['nav-tab', currentView==='search'?'active':'']" @click="currentView='search'">1. 课程查询</div>
+                <div :class="['nav-tab', currentView==='planning'?'active':'']" @click="currentView='planning'">2. 规划 & 策略</div>
+                <div :class="['nav-tab', currentView==='results'?'active':'']" @click="currentView='results'">3. 结果 & 课表</div>
+            </div>
+
+            <!-- View 1: Search -->
+            <div v-show="currentView==='search'" class="card">
+                <h2>添加备选课程组</h2>
+                <div class="search-grid">
+                    <input v-model="searchParams.name" placeholder="课程名">
+                    <input v-model="searchParams.code" placeholder="课程号">
+                    <select v-model="searchParams.campus">
+                        <option value="1">鼓楼</option>
+                        <option value="2">仙林</option>
+                    </select>
+                    <button @click="doSearch" :disabled="loading">{{ loading ? '搜索中...' : '搜索' }}</button>
+                </div>
+
+                <div v-if="searchResults.length > 0">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+                        <h3>搜索结果 ({{ searchResults.length }})</h3>
+                        <button @click="createGroup">将选中项存为一组</button>
+                    </div>
+                    <div class="results-list">
+                        <label v-for="(course, idx) in searchResults" :key="idx" class="result-item">
+                            <input type="checkbox" v-model="course.checked">
+                            <div>
+                                <strong>{{ course.name }}</strong> ({{ course.code }}) <br>
+                                <small>老师: {{ course.teacher }} | 地点: {{ course.location_text }}</small>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View 2: Planning -->
+            <div v-show="currentView==='planning'" class="card">
+                <h2>我的课程组 ({{ groups.length }})</h2>
+                <div v-if="groups.length === 0">暂无课程组，请先去搜索添加。</div>
+
+                <div v-for="(group, idx) in groups" :key="group.id" class="group-item">
+                    <div class="group-header" @click="group.open = !group.open">
+                        <span>
+                            <strong>组 {{ idx + 1 }}:</strong> {{ getGroupName(group) }}
+                            <small>({{ getActiveCount(group) }}/{{ group.candidates.length }} 选中)</small>
+                        </span>
+                        <button class="danger" @click.stop="removeGroup(idx)" style="padding: 4px 8px; font-size: 0.8rem;">删除</button>
+                    </div>
+                    <div :class="['group-body', group.open ? 'open' : '']">
+                        <label v-for="(course, cIdx) in group.candidates" :key="cIdx" class="result-item">
+                            <input type="checkbox"
+                                   :checked="group.selected_indices.includes(cIdx)"
+                                   @change="toggleCandidate(group, cIdx)">
+                            <div>
+                                {{ course.name }} - {{ course.teacher }} <br>
+                                <small>{{ course.location_text }}</small>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <h3>偏好设置</h3>
+                <label><input type="checkbox" v-model="preferences.avoid_early_morning"> 避开早八 (1-2节)</label> <br>
+                <label><input type="checkbox" v-model="preferences.avoid_weekend"> 避开周末</label> <br>
+                <div style="margin-top: 10px;">
+                    课程分布:
+                    <select v-model="preferences.compactness">
+                        <option value="none">无所谓</option>
+                        <option value="high">紧凑 (减少空课)</option>
+                        <option value="low">分散 (均匀分布)</option>
+                    </select>
+                </div>
+                <div style="margin-top: 10px;">
+                    <button @click="generateSchedules" style="width: 100%; padding: 15px; font-size: 1.1rem;">生成课表方案</button>
+                </div>
+            </div>
+
+            <!-- View 3: Results -->
+            <div v-show="currentView==='results'" class="card">
+                <div v-if="schedules.length === 0">请先生成方案。</div>
+                <div v-else>
+                    <h3>推荐方案 (共 {{ schedules.length }} 个)</h3>
+                    <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px;">
+                        <button v-for="(sch, idx) in schedules.slice(0, 10)"
+                                :key="idx"
+                                :class="currentScheduleIdx === idx ? '' : 'secondary'"
+                                @click="currentScheduleIdx = idx">
+                            方案 {{ idx + 1 }} <small>({{ sch.score }}分)</small>
+                        </button>
+                    </div>
+
+                    <div id="capture-area" style="background: white; padding: 15px; margin-top: 20px; border: 1px solid #eee;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h2 style="margin:0;">第 {{ currentScheduleIdx + 1 }} 方案课表</h2>
+                            <div>
+                                周次: <input type="number" v-model.number="currentWeek" min="1" max="25" style="width: 60px;">
+                            </div>
+                        </div>
+
+                        <table class="timetable">
+                            <thead>
+                                <tr>
+                                    <th>节次</th>
+                                    <th>周一</th><th>周二</th><th>周三</th><th>周四</th><th>周五</th><th>周六</th><th>周日</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="node in 13" :key="node">
+                                    <td>{{ node }}</td>
+                                    <td v-for="day in 7" :key="day">
+                                        <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1)"
+                                             class="cell-active">
+                                            {{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).name }} <br>
+                                            {{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).location }}
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button @click="downloadImage" style="margin-top: 20px;">保存为图片</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="toast" ref="toast"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
