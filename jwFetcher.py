@@ -5,6 +5,7 @@ import time
 import re
 import webview
 import threading
+import http.cookies
 
 # ================= 配置常量 =================
 TARGET_URL = "https://ehallapp.nju.edu.cn/jwapp/sys/kcbcx/modules/qxkcb/qxfbkccx.do"
@@ -87,17 +88,26 @@ class LoginInterceptor:
     def _check_login_status(self, window):
         # 轮询检测 URL 是否包含业务系统特征且不包含认证中心特征
         while True:
+            time.sleep(0.5)
             current_url = window.get_current_url()
             if current_url and "ehallapp.nju.edu.cn" in current_url and "authserver" not in current_url:
                 # 获取 Cookies (Webview > 5.0 API)
+                time.sleep(3) # 等待新的 cookie 注入完成
                 cookies = window.get_cookies()
-                if cookies:
-                    # 序列化为 Requests 兼容的字符串
-                    self._cookies = "; ".join([f"{c.get('name')}={c.get('value')}" for c in cookies])
-                    print("[Login] Authentication successful, cookies captured.")
-                    window.destroy()
-                    break
-            time.sleep(0.5)
+                pairs = ["EMAP_LANG=zh"]
+                for c in cookies:
+                    try:
+                        if isinstance(c, http.cookies.SimpleCookie):
+                            for key, morsel in c.items():
+                                pairs.append(f"{key}={morsel.value}")
+                        else:
+                            print(f"[Warn] Cannot parse cookie item: {c} - {type(c)}")
+                    except Exception as e:
+                        print(f"[Error] Parsing cookie failed: {c} - {e}")
+                self._cookies = "; ".join(pairs)
+                break
+        self._window.destroy()
+        
     
     def get_cookie(self):
         self._window = webview.create_window(
@@ -118,7 +128,8 @@ class NJUCourseClient:
             "Referer": "https://ehallapp.nju.edu.cn/jwapp/sys/kcbcx/*default/index.do",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "Cookie": cookie_str
+            "Cookie": cookie_str,
+            "X-Requested-With": "XMLHttpRequest"
         }
 
     def _get_campus_display(self, code):
@@ -226,6 +237,7 @@ if __name__ == "__main__":
     
     interceptor = LoginInterceptor()
     cookie_str = interceptor.get_cookie()
+    print(cookie_str)
     client = NJUCourseClient(cookie_str)
     
     # 2. 用户输入筛选条件 (留空则忽略)
