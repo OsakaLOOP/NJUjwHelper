@@ -66,7 +66,13 @@
             <div v-show="currentView==='search'" class="card">
                 <h2>添加备选课程组</h2>
                 <div class="search-grid">
-                    <input v-model="searchParams.name" placeholder="课程名">
+                    <div style="display: flex; gap: 5px;">
+                        <input v-model="searchParams.name" placeholder="课程名 (空格分隔多词)" style="flex: 1;">
+                        <select v-model="searchParams.match_mode" style="width: auto;">
+                            <option value="OR">任意 (OR)</option>
+                            <option value="AND">全部 (AND)</option>
+                        </select>
+                    </div>
                     <input v-model="searchParams.code" placeholder="课程号">
                     <select v-model="searchParams.campus">
                         <option value="1">鼓楼</option>

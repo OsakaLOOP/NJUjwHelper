@@ -174,9 +174,10 @@ class NJUCourseClient:
         mapping = {"1": "鼓楼校区", "2": "仙林校区", "3": "苏州校区", "4": "浦口校区"}
         return mapping.get(code, "未知校区")
 
-    def search(self, course_name=None, course_code=None, campus="1", semester="2025-2026-1"):
+    def search(self, course_name=None, course_code=None, campus="1", semester="2025-2026-1", match_mode="OR"):
         """
         分页拉取所有符合条件的数据
+        match_mode: "OR" (任意匹配) 或 "AND" (全部匹配) - 仅对 course_name 有效
         """
         all_data = []
         page = 1
@@ -189,20 +190,28 @@ class NJUCourseClient:
         if course_name:
             names = course_name.split()
             if len(names) > 1:
-                # 多关键词 OR 查询
-                # 结构: [[{name: KCM, value: A, linkOpt: AND}, {name: KCM, value: B, linkOpt: OR}, ...]]
-                kcm_group = []
-                for i, name in enumerate(names):
-                    opt = "AND" if i == 0 else "OR"
-                    kcm_group.append({
-                        "name": "KCM",
-                        "caption": "课程名",
-                        "linkOpt": opt,
-                        "builderList": "cbl_String",
-                        "builder": "include",
-                        "value": name
-                    })
-                query_list.append([kcm_group])
+                if match_mode == "AND":
+                    # AND 逻辑：添加多个独立条件
+                    for name in names:
+                        query_list.append({
+                            "name": "KCM", "caption": "课程名", "linkOpt": "AND",
+                            "builderList": "cbl_String", "builder": "include", "value": name
+                        })
+                else:
+                    # OR 逻辑：使用嵌套列表
+                    # 结构: [[{name: KCM, value: A, linkOpt: AND}, {name: KCM, value: B, linkOpt: OR}, ...]]
+                    kcm_group = []
+                    for i, name in enumerate(names):
+                        opt = "AND" if i == 0 else "OR"
+                        kcm_group.append({
+                            "name": "KCM",
+                            "caption": "课程名",
+                            "linkOpt": opt,
+                            "builderList": "cbl_String",
+                            "builder": "include",
+                            "value": name
+                        })
+                    query_list.append([kcm_group])
             else:
                 # 单关键词保持原样
                 query_list.append({"name": "KCM", "caption": "课程名", "linkOpt": "AND", "builderList": "cbl_String", "builder": "include", "value": course_name})
