@@ -66,7 +66,6 @@
             <!-- View 1: Search -->
             <div v-show="currentView==='search'" class="card">
                 <h2>添加备选课程组</h2>
-<<<<<<< HEAD
                 <div class="search-grid" style="display: flex; width: 100%; gap: 5; align-items: stretch;">
                     <input 
                         v-model="searchParams.name" 
@@ -80,22 +79,6 @@
                     >
                         <option value="OR">OR</option>
                         <option value="AND">AND</option>
-=======
-                <div class="search-grid">
-                    <div style="display: flex; gap: 5px;">
-                        <input v-model="searchParams.name" placeholder="课程名 (空格分隔多词)" style="flex: 1;">
-                        <select v-model="searchParams.match_mode" style="width: auto;">
-                            <option value="OR">任意 (OR)</option>
-                            <option value="AND">全部 (AND)</option>
-                        </select>
-                    </div>
-                    <input v-model="searchParams.code" placeholder="课程号">
-                    <select v-model="searchParams.campus">
-                        <option value="1">鼓楼</option>
-                        <option value="2">浦口</option>
-                        <option value="3">仙林</option>
-                        <option value="4">苏州</option>
->>>>>>> 999d7821f1bf421898cd1b26f587e6d1087f933a
                     </select>
 
                     <input 
@@ -158,11 +141,8 @@
 
             <!-- View 2: Planning -->
             <div v-show="currentView==='planning'" class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h2>我的课程组 ({{ groups.length }})</h2>
-                    <button class="secondary" @click="openImportModal">批量导入</button>
-                </div>
-                <div v-if="groups.length === 0">暂无课程组，请先去搜索添加或批量导入。</div>
+                <h2>我的课程组 ({{ groups.length }})</h2>
+                <div v-if="groups.length === 0">暂无课程组，请先去搜索添加。</div>
 
                 <div v-for="(group, idx) in groups" :key="group.id" class="group-item">
                     <div class="group-header" @click="group.open = !group.open">
@@ -249,40 +229,6 @@
         </div>
 
         <div class="toast" ref="toast"></div>
-
-        <!-- Import Modal -->
-        <div v-if="showImportModal" style="position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000;">
-            <div style="background: white; padding: 20px; border-radius: 8px; width: 600px; max-width: 90%; display: flex; flex-direction: column; gap: 10px;">
-                <h3>批量导入课程</h3>
-                <p style="font-size: 0.9em; color: #666;">请粘贴来自"学期培养方案"的表格内容 (包含课程号、课程名等)</p>
-                <textarea v-model="importText" rows="10" placeholder="粘贴内容到此处..." style="width: 100%; box-sizing: border-box;"></textarea>
-
-                <div style="display: flex; gap: 10px;">
-                    <div style="flex: 1;">
-                        <label>学期</label>
-                        <input v-model="importParams.semester" placeholder="2025-2026-1">
-                    </div>
-                    <div style="flex: 1;">
-                        <label>校区</label>
-                        <select v-model="importParams.campus">
-                            <option value="1">鼓楼</option>
-                            <option value="2">浦口</option>
-                            <option value="3">仙林</option>
-                            <option value="4">苏州</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div v-if="importStatus" style="background: #e3f2fd; padding: 10px; border-radius: 4px; color: #0d47a1;">
-                    {{ importStatus }}
-                </div>
-
-                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
-                    <button class="secondary" @click="closeImportModal" :disabled="isImporting">取消</button>
-                    <button @click="startBatchImport" :disabled="isImporting">{{ isImporting ? '导入中...' : '开始导入' }}</button>
-                </div>
-            </div>
-        </div>
     </div>
 
     <script src="app.js"></script>
