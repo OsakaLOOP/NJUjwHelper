@@ -24,7 +24,8 @@
 
         /* Search */
         .search-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 10px; }
-        input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
+        input:not([type="checkbox"]), select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
+        input[type="checkbox"] { width: 20px; height: 20px; margin-right: 10px; cursor: pointer; }
         .results-list { max-height: 400px; overflow-y: auto; margin-top: 10px; }
         .result-item { border-bottom: 1px solid #eee; padding: 10px; display: flex; align-items: start; gap: 10px; }
 
@@ -48,7 +49,7 @@
 <body>
     <div id="app">
         <header>
-            <h1>NJU 选课助手</h1>
+            <h1>NJU 选课助手 <span v-if="groups.length > 0" style="font-size: 0.8em; margin-left: 10px; font-weight: normal;">当前组数: {{ groups.length }}</span></h1>
             <div>
                 <button @click="saveSession" class="secondary" style="margin-right: 10px;">保存进度</button>
                 <button @click="newSession" class="danger">重置</button>
@@ -76,13 +77,23 @@
                     <button @click="doSearch" :disabled="loading">{{ loading ? '搜索中...' : '搜索' }}</button>
                 </div>
 
-                <div v-if="searchResults.length > 0">
+                <div v-if="hasSearched">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
-                        <h3>搜索结果 ({{ searchResults.length }})</h3>
+                        <h3>搜索结果 ({{ filteredSearchResults.length }})</h3>
                         <button @click="createGroup">将选中项存为一组</button>
                     </div>
-                    <div class="results-list">
-                        <label v-for="(course, idx) in searchResults" :key="idx" class="result-item">
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px; margin-top: 10px;">
+                        <input v-model="filterText" placeholder="在结果中筛选 (名称/老师/地点)..." style="flex: 1;">
+                        <button class="secondary" @click="toggleSelectAll">全选/反选</button>
+                    </div>
+
+                    <div v-if="filteredSearchResults.length === 0" style="padding: 20px; text-align: center; color: #666;">
+                        {{ searchResults.length === 0 ? '未找到符合条件的课程。' : '当前筛选条件下没有课程。' }}
+                    </div>
+
+                    <div class="results-list" v-else>
+                        <label v-for="(course, idx) in filteredSearchResults" :key="idx" class="result-item">
                             <input type="checkbox" v-model="course.checked">
                             <div>
                                 <strong>{{ course.name }}</strong> ({{ course.code }}) <br>

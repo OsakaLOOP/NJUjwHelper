@@ -1,4 +1,4 @@
-const { createApp, ref, reactive, computed } = Vue;
+const { createApp, ref, reactive, computed, onMounted } = Vue;
 
 createApp({
     setup() {
@@ -14,24 +14,39 @@ createApp({
             max_daily_load: 0
         });
 
+        const filterText = ref('');
+        const hasSearched = ref(false);
+
         const schedules = ref([]);
         const currentScheduleIdx = ref(0);
         const currentWeek = ref(1);
         const toastRef = ref(null);
 
+        // --- Computed ---
+
+        const filteredSearchResults = computed(() => {
+            if (!filterText.value) return searchResults.value;
+            const term = filterText.value.toLowerCase();
+            return searchResults.value.filter(c => {
+                const combined = (c.name + (c.teacher || '') + (c.location_text || '')).toLowerCase();
+                return combined.includes(term);
+            });
+        });
+
         // --- Methods ---
 
         const showToast = (msg) => {
             const el = document.querySelector('.toast');
-            el.innerText = msg;
-            el.style.display = 'block';
-            setTimeout(() => el.style.display = 'none', 3000);
+            if (el) {
+                el.innerText = msg;
+                el.style.display = 'block';
+                setTimeout(() => el.style.display = 'none', 3000);
+            }
         };
 
         const doSearch = async () => {
             loading.value = true;
             try {
-                // Mock or Real Call
                 let res;
                 if (window.pywebview) {
                     res = await window.pywebview.api.search(searchParams);
@@ -39,17 +54,27 @@ createApp({
                     // Mock
                     await new Promise(r => setTimeout(r, 500));
                     res = [
-                        { name: '高等数学', code: '001', teacher: '张三', location_text: '周一 1-2节 1-16周', checked: true, schedule_bitmaps: Array(26).fill(3) }, // 3 = 1 | 2 (bits 0,1)
-                        { name: '高等数学', code: '001', teacher: '李四', location_text: '周二 3-4节 1-16周', checked: true, schedule_bitmaps: Array(26).fill(12) } // 12 = 4 | 8 (bits 2,3)
+                        { name: '高等数学', code: '001', teacher: '张三', location_text: '周一 1-2节 1-16周', checked: false, schedule_bitmaps: Array(26).fill(3) },
+                        { name: '高等数学', code: '001', teacher: '李四', location_text: '周二 3-4节 1-16周', checked: false, schedule_bitmaps: Array(26).fill(12) }
                     ];
                 }
-                // Add checked property
-                searchResults.value = res.map(c => ({ ...c, checked: true }));
+                // Initialize checked as FALSE
+                searchResults.value = res.map(c => ({ ...c, checked: false }));
+                hasSearched.value = true;
+                filterText.value = ''; // Reset filter
             } catch (e) {
                 showToast("搜索失败: " + e);
             } finally {
                 loading.value = false;
             }
+        };
+
+        const toggleSelectAll = () => {
+            const visible = filteredSearchResults.value;
+            if (visible.length === 0) return;
+
+            const allChecked = visible.every(c => c.checked);
+            visible.forEach(c => c.checked = !allChecked);
         };
 
         const createGroup = () => {
@@ -59,12 +84,14 @@ createApp({
             groups.value.push({
                 id: Date.now(),
                 open: false,
-                candidates: selected, // Store full objects
-                selected_indices: selected.map((_, i) => i) // Default all active
+                candidates: JSON.parse(JSON.stringify(selected)),
+                selected_indices: selected.map((_, i) => i)
             });
-            searchResults.value = [];
-            currentView.value = 'planning';
+            // Uncheck after adding
+            searchResults.value.forEach(c => c.checked = false);
+
             showToast("已添加新课程组");
+            // Stay on search view
         };
 
         const getGroupName = (group) => {
@@ -87,7 +114,6 @@ createApp({
             loading.value = true;
             try {
                 if (window.pywebview) {
-                    // Send Clean Data (strip huge objects if needed, but pywebview handles JSON)
                     const cleanGroups = JSON.parse(JSON.stringify(groups.value));
                     const res = await window.pywebview.api.generate_schedules(cleanGroups, preferences);
                     if (res.error) {
@@ -114,15 +140,13 @@ createApp({
         const getCell = (schIdx, week, day, node) => {
             if (!schedules.value[schIdx]) return null;
             const courses = schedules.value[schIdx].courses;
-            // day: 0-6, node: 0-12. Bit pos = day*13 + node
             const bitPos = day * 13 + node;
             const mask = 1 << bitPos;
 
             for (let c of courses) {
-                // Check bitmap for this week
                 const weekMap = c.schedule_bitmaps ? c.schedule_bitmaps[week] : 0;
                 if ((weekMap & mask) !== 0) {
-                    return { name: c.name, location: c.location_text.split(' ')[0] }; // Simple display
+                    return { name: c.name, location: c.location_text.split(' ')[0] };
                 }
             }
             return null;
@@ -130,12 +154,14 @@ createApp({
 
         const downloadImage = () => {
             const el = document.getElementById('capture-area');
-            html2canvas(el).then(canvas => {
-                const link = document.createElement('a');
-                link.download = 'schedule.png';
-                link.href = canvas.toDataURL();
-                link.click();
-            });
+            if(window.html2canvas) {
+                window.html2canvas(el).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = 'schedule.png';
+                    link.href = canvas.toDataURL();
+                    link.click();
+                });
+            }
         };
 
         const saveSession = async () => {
@@ -150,17 +176,44 @@ createApp({
                 groups.value = [];
                 schedules.value = [];
                 currentView.value = 'search';
+                searchResults.value = [];
+                hasSearched.value = false;
+                filterText.value = '';
             }
         };
 
-        // Auto load session on start if needed?
-        // Not requested, but good practice. For now manual.
+        const init = async () => {
+            if (window.pywebview) {
+                try {
+                    const data = await window.pywebview.api.load_session();
+                    if (data) {
+                        if (data.groups) groups.value = data.groups;
+                        if (data.preferences) Object.assign(preferences, data.preferences);
+
+                        if (groups.value.length > 0) {
+                            currentView.value = 'planning';
+                        } else {
+                            currentView.value = 'search';
+                        }
+                    }
+                } catch (e) {
+                    console.error("Init error", e);
+                }
+            }
+        };
+
+        onMounted(() => {
+            window.addEventListener('pywebviewready', init);
+            setTimeout(init, 500); // Fallback
+        });
 
         return {
             currentView, loading, searchParams, searchResults,
             groups, preferences, schedules, currentScheduleIdx, currentWeek,
+            filterText, hasSearched, filteredSearchResults,
             doSearch, createGroup, getGroupName, getActiveCount, toggleCandidate, removeGroup,
-            generateSchedules, getCell, downloadImage, saveSession, newSession, toastRef
+            generateSchedules, getCell, downloadImage, saveSession, newSession, toastRef,
+            toggleSelectAll
         };
     }
 }).mount('#app');
