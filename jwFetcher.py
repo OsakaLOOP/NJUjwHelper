@@ -3,9 +3,12 @@ import json
 import math
 import time
 import re
+import webview
+import threading
 
 # ================= 配置常量 =================
 TARGET_URL = "https://ehallapp.nju.edu.cn/jwapp/sys/kcbcx/modules/qxkcb/qxfbkccx.do"
+GATEWAY_URL = "https://ehallapp.nju.edu.cn/jwapp/sys/kcbcx/*default/index.do"
 
 # 星期映射 (用于位图计算)
 WEEKDAY_MAP = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6, "天": 6}
@@ -74,6 +77,38 @@ class ScheduleBitmapper:
                     semester_schedule[w] |= segment_mask
                     
         return semester_schedule
+
+class LoginInterceptor:
+    """基于 pywebview 的登录与 Cookie 嗅探"""
+    def __init__(self):
+        self._cookies = None
+        self._window = None
+
+    def _check_login_status(self, window):
+        # 轮询检测 URL 是否包含业务系统特征且不包含认证中心特征
+        while True:
+            current_url = window.get_current_url()
+            if current_url and "ehallapp.nju.edu.cn" in current_url and "authserver" not in current_url:
+                # 获取 Cookies (Webview > 5.0 API)
+                cookies = window.get_cookies()
+                if cookies:
+                    # 序列化为 Requests 兼容的字符串
+                    self._cookies = "; ".join([f"{c.get('name')}={c.get('value')}" for c in cookies])
+                    print("[Login] Authentication successful, cookies captured.")
+                    window.destroy()
+                    break
+            time.sleep(0.5)
+    
+    def get_cookie(self):
+        self._window = webview.create_window(
+            "NJU Unified Auth - Please Login", 
+            GATEWAY_URL,
+            width=500, height=600, resizable=False
+        )
+        # 在独立线程中运行检测逻辑，防止阻塞 UI
+        threading.Thread(target=self._check_login_status, args=(self._window,), daemon=True).start()
+        webview.start()
+        return self._cookies
 
 class NJUCourseClient:
     def __init__(self, cookie_str):
@@ -189,13 +224,9 @@ class NJUCourseClient:
 if __name__ == "__main__":
     print("=== NJU Course Fetcher & Bitmapper ===")
     
-    # 1. 用户输入 Cookie
-    cookie_input = input("请输入完整的 Cookie 字符串: ").strip()
-    if not cookie_input:
-        print("Cookie 不能为空")
-        exit()
-        
-    client = NJUCourseClient(cookie_input)
+    interceptor = LoginInterceptor()
+    cookie_str = interceptor.get_cookie()
+    client = NJUCourseClient(cookie_str)
     
     # 2. 用户输入筛选条件 (留空则忽略)
     in_name = input("课程名 (如 '微积分', 可空): ").strip()
@@ -213,7 +244,6 @@ if __name__ == "__main__":
         print(f"    地点: {course['location_text']}")
         # 演示第一周的二进制
         week1_mask = course['schedule_bitmaps'][1]
-        print(f"    Week 1 Bitmap (Int): {week1_mask}")
         print(f"    Week 1 Bitmap (Bin): {bin(week1_mask)}")
     
     # 5. 保存
