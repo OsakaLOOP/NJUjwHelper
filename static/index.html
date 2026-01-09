@@ -72,6 +72,7 @@
                         <option value="1">鼓楼</option>
                         <option value="2">仙林</option>
                     </select>
+                    <input v-model="searchParams.semester" placeholder="学期 (如 2025-2026-1)">
                     <button @click="doSearch" :disabled="loading">{{ loading ? '搜索中...' : '搜索' }}</button>
                 </div>
 
