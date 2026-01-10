@@ -44,10 +44,14 @@ class Api:
         conflicts = ScheduleSolver.check_conflicts(groups)
         if conflicts:
             conflict_msg = []
-            for i, j in conflicts:
+            for item in conflicts:
+                # item is (i, j, reason)
+                i, j = item[0], item[1]
+                reason = item[2] if len(item) > 2 else "Unknown"
+
                 name1 = groups[i]['candidates'][0]['name'] if groups[i]['candidates'] else f"Group {i+1}"
                 name2 = groups[j]['candidates'][0]['name'] if groups[j]['candidates'] else f"Group {j+1}"
-                conflict_msg.append(f"{name1} 与 {name2} 存在必然冲突")
+                conflict_msg.append(f"{name1} 与 {name2} 冲突 ({reason})")
             return {'error': " | ".join(conflict_msg)}
 
         # 2. Generate
