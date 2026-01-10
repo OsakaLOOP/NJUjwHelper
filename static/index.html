@@ -79,7 +79,7 @@
                         style="flex: 1; min-width: 0; box-sizing: border-box;"
                     >
 
-                    <select 
+                    <select title="空格分隔关键词处理"
                         v-model="searchParams.match_mode" 
                         style="width: auto; flex-shrink: 0; box-sizing: border-box;"
                     >
@@ -242,7 +242,7 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                             <h2 style="margin:0;">第 {{ currentScheduleIdx + 1 }} 方案课表</h2>
                             <div>
-                                周次: <input type="number" v-model.number="currentWeek" min="1" max="25" style="width: 60px;">
+                                周次: <input type="number" v-model.number="currentWeek" min="1" max="20" style="width: 60px;">
                             </div>
                         </div>
 
@@ -308,7 +308,7 @@
                 <div style="display: flex; gap: 10px;">
                     <div style="flex: 1;">
                         <label>学期</label>
-                        <input v-model="importParams.semester" placeholder="2025-2026-1">
+                        <input v-model="importParams.semester" placeholder="2025-2026-2">
                     </div>
                     <div style="flex: 1;">
                         <label>校区</label>

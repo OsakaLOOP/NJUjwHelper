@@ -4,7 +4,7 @@ createApp({
     setup() {
         const currentView = ref('search'); // search, planning, results
         const loading = ref(false);
-        const searchParams = reactive({ name: '', code: '', campus: '1', semester: '2025-2026-1', match_mode: 'OR' });
+        const searchParams = reactive({ name: '', code: '', campus: '1', semester: '2025-2026-2', match_mode: 'OR' });
         const searchResults = ref([]);
         const groups = ref([]);
         const preferences = reactive({
