@@ -55,7 +55,8 @@ class Api:
             return {'error': " | ".join(conflict_msg)}
 
         # 2. Generate
-        raw_schedules = ScheduleSolver.generate_schedules(groups)
+        # Pass preferences to solver for DFS pruning/ordering
+        raw_schedules = ScheduleSolver.generate_schedules(groups, preferences=preferences)
         print(f"[Api] Found {len(raw_schedules)} valid schedules")
 
         # 3. Rank

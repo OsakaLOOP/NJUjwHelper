@@ -23,14 +23,15 @@ class TestApiFlow(unittest.TestCase):
             course_name='Math',
             course_code=None,
             campus='1',
-            semester='2025-2026-1'
+            semester='2025-2026-1',
+            match_mode='OR'
         )
 
     def test_generate_flow(self):
         # Dummy groups
         groups = [{
             'id': 1,
-            'candidates': [{'name': 'A', 'schedule_bitmaps': [0, 3]}],
+            'candidates': [{'name': 'A', 'schedule_bitmaps': [0, 3], 'selected': True}],
             'selected_indices': [0]
         }]
         prefs = {'avoid_early_morning': False}
