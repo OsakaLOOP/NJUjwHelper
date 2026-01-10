@@ -4,3 +4,4 @@
 .env
 cookies.txt
 saved_sessions/last_session.json
+server.log
