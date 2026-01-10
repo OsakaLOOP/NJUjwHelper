@@ -42,28 +42,20 @@ class ScheduleBitmapper:
     @staticmethod
     def generate_bitmap(location_text, max_weeks=25):
         """
-        核心算法：生成时间位图列表
-        Returns: List[int], index=周次 (0不使用), value=当周的位掩码
+        核心算法：生成时间位图列表 和 结构化会话数据
+        Returns:
+           bitmap: List[str], index=周次 (0不使用), value=当周的位掩码(字符串格式, 避免整数溢出)
+           sessions: List[dict], 包含结构化的时间地点信息
         位掩码规则: Day(0-6) * 13 + Node(0-12) -> 对应 Bit 置 1
         """
         # 初始化：0周不用，1-max_weeks 周
         semester_schedule = [0] * (max_weeks + 1)
+        sessions = []
         
         if not location_text:
-            return semester_schedule
+            return [str(x) for x in semester_schedule], sessions
 
         # 处理多个时间段，通常用分号分隔
-        # 还要过滤掉地点信息，只保留时间部分，防止正则误判
-        # 简单策略：直接对整个字符串扫正则
-        # 同时检测 (单) 或 (双)
-        # Note: 正则无法直接捕获匹配段落后面的 (单)/(双) 标记，因为中间可能夹杂地点等信息
-        # 改进策略: Split by space or comma, then process each segment if it contains "周x"
-        # 简单起见，我们还是用 finditer，但是我们尝试在 match 对象的周围寻找 (单)/(双)
-        # 或者，更粗暴的：如果整个 location_text 包含 单/双，可能不太对，因为可能有 "周一(单) 周二(双)"
-        # 所以必须分段处理。
-        
-        # Split by comma or semicolon to separate different time rules roughly
-        # 观察样本: "周五 5-6节 1-16周 教103, 周三 3-4节 1-15周(单) 教103"
         segments = re.split(r'[,;]', location_text)
 
         for seg in segments:
@@ -74,6 +66,13 @@ class ScheduleBitmapper:
             is_odd_only = "(单)" in seg
             is_even_only = "(双)" in seg
             
+            # 尝试从 seg 中提取地点信息 (移除匹配的时间部分)
+            # 这是一个简单的 heuristic，可能不完美
+            location_part = seg
+            for m in matches:
+                location_part = location_part.replace(m.group(0), "")
+            location_part = location_part.replace("(单)", "").replace("(双)", "").strip()
+
             for match in matches:
                 day_char, start_node, end_node, week_range_str = match.groups()
 
@@ -81,6 +80,26 @@ class ScheduleBitmapper:
                 s_node = int(start_node)
                 e_node = int(end_node)
                 active_weeks = ScheduleBitmapper.parse_week_ranges(week_range_str)
+
+                # Filter active weeks based on odd/even
+                filtered_weeks = []
+                for w in active_weeks:
+                    if 0 < w <= max_weeks:
+                        if is_odd_only and (w % 2 == 0): continue
+                        if is_even_only and (w % 2 != 0): continue
+                        filtered_weeks.append(w)
+
+                if not filtered_weeks:
+                    continue
+
+                # Store structured session
+                sessions.append({
+                    "day": day_idx,
+                    "start": s_node,
+                    "end": e_node,
+                    "weeks": filtered_weeks,
+                    "location": location_part
+                })
 
                 # 1. 计算这一条时间规则在“单周”内的掩码 (Base Mask)
                 segment_mask = 0
@@ -91,17 +110,11 @@ class ScheduleBitmapper:
                     segment_mask |= (1 << bit_pos)
 
                 # 2. 将掩码填充到具体的周次中
-                for w in active_weeks:
-                    if 0 < w <= max_weeks:
-                        # 检查单双周限制
-                        if is_odd_only and (w % 2 == 0):
-                            continue # Skip even weeks
-                        if is_even_only and (w % 2 != 0):
-                            continue # Skip odd weeks
-
-                        semester_schedule[w] |= segment_mask
+                for w in filtered_weeks:
+                    semester_schedule[w] |= segment_mask
                     
-        return semester_schedule
+        # Convert bitmaps to string to prevent JS overflow
+        return [str(x) for x in semester_schedule], sessions
 
 class LoginInterceptor:
     """基于 pywebview 的登录与 Cookie 嗅探"""
@@ -323,7 +336,7 @@ class NJUCourseClient:
                         continue
 
                     # 调用正则解析器
-                    bitmap = ScheduleBitmapper.generate_bitmap(raw_loc)
+                    bitmap, sessions = ScheduleBitmapper.generate_bitmap(raw_loc)
                     
                     item = {
                         "name": row.get("KCM"),
@@ -332,7 +345,8 @@ class NJUCourseClient:
                         "location_text": raw_loc,
                         "school": row.get("PKDWDM_DISPLAY") or row.get("KKDWDM_DISPLAY"),
                         # 输出二进制列表 (核心)
-                        "schedule_bitmaps": bitmap 
+                        "schedule_bitmaps": bitmap,
+                        "sessions": sessions
                     }
 
                     # 过滤 2: 完全一致项目去重
@@ -385,7 +399,8 @@ if __name__ == "__main__":
         print(f"    地点: {course['location_text']}")
         # 演示第一周的二进制
         week1_mask = course['schedule_bitmaps'][1]
-        print(f"    Week 1 Bitmap (Bin): {bin(week1_mask)}")
+        print(f"    Week 1 Bitmap (String): {week1_mask}")
+        print(f"    Sessions: {course['sessions']}")
     
     # 5. 保存
     with open("nju_courses_final.json", "w", encoding="utf-8") as f:

@@ -32,6 +32,16 @@ createApp({
         const importStatus = ref('');
         const importParams = reactive({ semester: '2025-2026-1', campus: '1' });
 
+        // Alternatives Modal
+        const showAltModal = ref(false);
+        const currentAltCourse = ref(null);
+
+        const openAlternatives = (courseData) => {
+            if (!courseData || !courseData.alternatives || courseData.alternatives.length <= 1) return;
+            currentAltCourse.value = courseData;
+            showAltModal.value = true;
+        };
+
         // --- Computed ---
 
         const filteredSearchResults = computed(() => {
@@ -256,13 +266,48 @@ createApp({
         const getCell = (schIdx, week, day, node) => {
             if (!schedules.value[schIdx]) return null;
             const courses = schedules.value[schIdx].courses;
-            const bitPos = day * 13 + node;
-            const mask = 1 << bitPos;
+            const bitPos = BigInt(day * 13 + node);
+            const mask = 1n << bitPos;
 
             for (let c of courses) {
-                const weekMap = c.schedule_bitmaps ? c.schedule_bitmaps[week] : 0;
-                if ((weekMap & mask) !== 0) {
-                    return { name: c.name, location: c.location_text.split(' ')[0] };
+                // schedule_bitmaps are strings now
+                let weekMapStr = c.schedule_bitmaps ? c.schedule_bitmaps[week] : "0";
+                if (!weekMapStr) weekMapStr = "0";
+                const weekMap = BigInt(weekMapStr);
+
+                if ((weekMap & mask) !== 0n) {
+                    // Found the course occupying this cell
+                    // Find specific session info
+                    let loc = "未知地点";
+                    if (c.sessions) {
+                        // Find session matching day and node and week
+                        // node is 0-indexed in our loop (0-12), but sessions might use 1-indexed?
+                        // Let's check jwFetcher.py: s_node, e_node are int. node loop was range(s_node, e_node+1).
+                        // bit_pos = (day_idx * 13) + (node - 1).
+                        // So our `node` arg here corresponds to `node - 1` in parser logic.
+                        // Or rather, `node` here is 0..12.
+                        // `sessions` start/end are 1..13.
+                        const currentPeriod = node + 1;
+                        const sess = c.sessions.find(s =>
+                            s.day === day &&
+                            currentPeriod >= s.start &&
+                            currentPeriod <= s.end &&
+                            s.weeks.includes(week)
+                        );
+                        if (sess) {
+                            loc = sess.location;
+                        }
+                    } else {
+                         // Fallback logic if sessions missing
+                         loc = (c.location_text || "").split(' ')[0];
+                    }
+
+                    return {
+                        name: c.name,
+                        teacher: c.teacher,
+                        location: loc,
+                        alternatives: c.alternatives // passed from solver
+                    };
                 }
             }
             return null;
@@ -380,7 +425,8 @@ createApp({
             generateSchedules, getCell, downloadImage, saveSession, newSession, toastRef,
             toggleSelectAll, toggleAllDays, invertDays,
             showImportModal, importText, isImporting, importStatus, importParams,
-            openImportModal, closeImportModal, startBatchImport
+            openImportModal, closeImportModal, startBatchImport,
+            showAltModal, currentAltCourse, openAlternatives
         };
     }
 }).mount('#app');

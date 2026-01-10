@@ -44,6 +44,12 @@
 
         /* Toast */
         .toast { position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 10px 20px; border-radius: 4px; z-index: 1000; display: none; }
+
+        /* Alternatives Modal/Overlay */
+        .alt-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 3000; display: flex; justify-content: center; align-items: center; }
+        .alt-card { background: white; padding: 20px; border-radius: 8px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .alt-item { padding: 10px; border-bottom: 1px solid #eee; }
+        .alt-item:last-child { border-bottom: none; }
     </style>
 </head>
 <body>
@@ -252,9 +258,16 @@
                                     <td>{{ node }}</td>
                                     <td v-for="day in 7" :key="day">
                                         <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1)"
-                                             class="cell-active">
-                                            {{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).name }} <br>
-                                            {{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).location }}
+                                             class="cell-active"
+                                             @click="openAlternatives(getCell(currentScheduleIdx, currentWeek, day-1, node-1))"
+                                             style="cursor: pointer;">
+                                            <div style="font-weight: bold;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).name }}</div>
+                                            <div style="font-size: 0.8em;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).teacher }}</div>
+                                            <div style="font-size: 0.8em;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).location }}</div>
+                                            <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives && getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives.length > 1"
+                                                 style="background: #1976d2; color: white; border-radius: 10px; padding: 0 4px; font-size: 0.7em; display: inline-block; margin-top: 2px;">
+                                                +{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives.length - 1 }}
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -267,6 +280,23 @@
         </div>
 
         <div class="toast" ref="toast"></div>
+
+        <!-- Alternatives Modal -->
+        <div v-if="showAltModal" class="alt-overlay" @click.self="showAltModal = false">
+            <div class="alt-card">
+                <h3>{{ currentAltCourse ? currentAltCourse.name : '' }} - 可选老师</h3>
+                <div v-if="currentAltCourse && currentAltCourse.alternatives">
+                    <div v-for="(alt, idx) in currentAltCourse.alternatives" :key="idx" class="alt-item">
+                        <strong>{{ alt.teacher }}</strong>
+                        <div style="color: #666; font-size: 0.9em;">{{ alt.location_text }}</div>
+                        <div style="color: #666; font-size: 0.9em;">{{ alt.code }}</div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; text-align: right;">
+                    <button @click="showAltModal = false">关闭</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Import Modal -->
         <div v-if="showImportModal" style="position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000;">
