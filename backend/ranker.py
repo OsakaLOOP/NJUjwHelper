@@ -2,18 +2,14 @@ import math
 
 class ScheduleRanker:
     @staticmethod
-    def score_schedule(schedule, preferences):
+    def evaluate_schedule(schedule, preferences):
         """
-        Scores a schedule based on preferences.
-        Lower score is better? Or Higher? Let's say Higher is better.
-
-        Preferences:
-        - avoid_early_morning (bool): 1-2节
-        - avoid_weekend (bool): Sat/Sun
-        - compactness (str): "high" (bunch together), "low" (spread out), "none"
-        - max_daily_load (int): Penalty if > X
+        Evaluates a schedule based on preferences and returns score + breakdown.
         """
-        score = 100.0
+        base_score = 100.0
+        details = {}
+        total_penalty = 0.0
+        total_bonus = 0.0
 
         # Merge bitmaps
         full_bitmap = [0] * 30 # Assume max weeks 25
@@ -29,14 +25,12 @@ class ScheduleRanker:
                             val = 0
                     full_bitmap[w] |= val
 
-        # 1. Avoid Early Morning (Nodes 1-2 -> Bits 0-1, 13-14, etc.)
+        # 1. Avoid Early Morning
         if preferences.get('avoid_early_morning'):
             penalty = 0
-            for w in range(1, 26): # Check typical weeks
+            for w in range(1, 26):
                 mask = full_bitmap[w]
                 if mask == 0: continue
-                # Early morning mask: Day 0..6, Nodes 0..1
-                # Bit pos = day*13 + node
                 early_mask = 0
                 for d in range(7):
                     early_mask |= (1 << (d * 13 + 0))
@@ -44,14 +38,15 @@ class ScheduleRanker:
 
                 if (mask & early_mask):
                     penalty += 1
-            score -= penalty * 2 # 严格惩罚早八
 
-        # 2. Avoid Weekend (Days 5, 6)
+            p_val = penalty * 2
+            total_penalty += p_val
+            details['早八回避'] = -p_val
+
+        # 2. Avoid Weekend
         if preferences.get('avoid_weekend'):
             penalty = 0
             weekend_mask = 0
-            # Day 5 (Sat), Day 6 (Sun). All 13 nodes.
-            # Bits 65-77 (Sat), 78-90 (Sun) ... wait 5*13=65.
             for node in range(13):
                 weekend_mask |= (1 << (5 * 13 + node))
                 weekend_mask |= (1 << (6 * 13 + node))
@@ -59,14 +54,13 @@ class ScheduleRanker:
             for w in range(1, 26):
                 if (full_bitmap[w] & weekend_mask):
                     penalty += 1
-            score -= penalty * 2.0 # Higher penalty for weekends
 
-        # 3. Compactness (Variance of start times? Or density?)
-        # Let's use daily variance.
-        # Compact -> High density, few gaps.
-        # Spread -> Evenly distributed.
+            p_val = penalty * 2.0
+            total_penalty += p_val
+            details['周末回避'] = -p_val
+
+        # 3. Compactness
         if preferences.get('compactness') in ['high', 'low']:
-            # Calculate gaps
             total_gaps = 0
             for w in range(1, 26):
                 mask = full_bitmap[w]
@@ -75,10 +69,6 @@ class ScheduleRanker:
                     day_bits = (mask >> (d * 13)) & 0x1FFF
                     if day_bits == 0: continue
 
-                    # Convert to string binary to find 101 patterns (gap)
-                    bin_str = bin(day_bits)[2:].zfill(13) # LSB is 1st class?
-                    # Actually LSB is node 0 (1st class). `bin` output is MSB left.
-                    # Let's just iterate
                     has_started = False
                     gap_count = 0
                     current_gap = 0
@@ -96,9 +86,13 @@ class ScheduleRanker:
                     total_gaps += gap_count
 
             if preferences['compactness'] == 'high':
-                score -= total_gaps * 0.2 # Penalty for gaps
+                p_val = total_gaps * 0.2
+                total_penalty += p_val
+                details['课程紧凑'] = -p_val
             else:
-                score += total_gaps * 0.2 # Bonus for gaps (spread)
+                b_val = total_gaps * 0.2
+                total_bonus += b_val
+                details['课程分散'] = +b_val
 
         # 4. Max Daily Load
         limit = preferences.get('max_daily_load')
@@ -109,40 +103,43 @@ class ScheduleRanker:
                 if mask == 0: continue
                 for d in range(7):
                     day_bits = (mask >> (d * 13)) & 0x1FFF
-                    # Count set bits
                     count = bin(day_bits).count('1')
                     if count > limit:
                         overload += (count - limit)
-            score -= overload * 5.0 # Heavy penalty
+            p_val = overload * 5.0
+            total_penalty += p_val
+            details['每日负载'] = -p_val
 
-        # 5. Day Max Limit (Specific Days)
+        # 5. Day Max Limit
         if preferences.get('day_max_limit_enabled'):
             limit = preferences.get('day_max_limit_value', 4)
-            target_days = preferences.get('day_max_limit_days', []) # List of bools, idx 0=Mon
-
-            penalty = 0
-            # Ensure target_days has 7 elements
+            target_days = preferences.get('day_max_limit_days', [])
             if len(target_days) < 7:
                 target_days = target_days + [False] * (7 - len(target_days))
 
+            penalty = 0
             for w in range(1, 26):
                 mask = full_bitmap[w]
                 if mask == 0: continue
-
                 for d in range(7):
-                    # Check if this day is selected for limiting
-                    if not target_days[d]:
-                        continue
-
+                    if not target_days[d]: continue
                     day_bits = (mask >> (d * 13)) & 0x1FFF
                     count = bin(day_bits).count('1')
-
                     if count > limit:
-                        # Penalty calculation
-                        # If limit is 0 (day off), any class is bad.
                         diff = count - limit
-                        penalty += diff * 50.0 # Very heavy penalty
+                        penalty += diff * 50.0
 
-            score -= penalty
+            p_val = penalty
+            total_penalty += p_val
+            details['特定日限制'] = -p_val
 
-        return score
+        final_score = base_score + total_bonus - total_penalty
+        return {
+            'score': final_score,
+            'details': details
+        }
+
+    @staticmethod
+    def score_schedule(schedule, preferences):
+        result = ScheduleRanker.evaluate_schedule(schedule, preferences)
+        return result['score']

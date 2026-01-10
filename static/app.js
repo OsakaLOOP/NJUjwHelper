@@ -252,7 +252,17 @@ createApp({
                 } else {
                     // Mock
                     schedules.value = [
-                        { score: 95, courses: [groups.value[0].candidates[0]] }
+                        {
+                            score: 95,
+                            score_details: {'早八回避': -2, '课程紧凑': 5},
+                            stats: {
+                                'total_credits': 22.5,
+                                'total_hours': 400,
+                                'avg_weekly_hours': 25.0,
+                                'week_span': '1-16'
+                            },
+                            courses: [groups.value[0].candidates[0]]
+                        }
                     ];
                     currentView.value = 'results';
                 }
@@ -330,11 +340,23 @@ createApp({
         const downloadImage = () => {
             const el = document.getElementById('capture-area');
             if(window.html2canvas) {
-                window.html2canvas(el).then(canvas => {
-                    const link = document.createElement('a');
-                    link.download = 'schedule.png';
-                    link.href = canvas.toDataURL();
-                    link.click();
+                window.html2canvas(el).then(async (canvas) => {
+                    const dataUrl = canvas.toDataURL();
+                    if (window.pywebview) {
+                        // Use backend dialog
+                        const success = await window.pywebview.api.save_image_dialog(dataUrl);
+                        if (success) {
+                            showToast("图片已保存");
+                        } else {
+                            showToast("保存取消或失败");
+                        }
+                    } else {
+                        // Fallback for browser testing
+                        const link = document.createElement('a');
+                        link.download = 'schedule.png';
+                        link.href = dataUrl;
+                        link.click();
+                    }
                 });
             }
         };

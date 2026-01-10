@@ -10,7 +10,7 @@
         body { font-family: "Microsoft YaHei", sans-serif; margin: 0; padding: 0; background: #f5f5f5; color: #333; }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         header { background: #6200ea; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        h1 { margin: 0; font-size: 1.2rem; }
+        h1 { margin: 0; font-size: 1.2rem; display: flex; align-items: baseline; }
         button { background: #03dac6; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         button:hover { opacity: 0.9; }
         button.secondary { background: #ccc; }
@@ -55,7 +55,11 @@
 <body>
     <div id="app">
         <header>
-            <h1>🐋南哪选课助手 <span v-if="groups.length > 0" style="font-size: 0.8em; margin-left: 10px; font-weight: normal;">当前组数: {{ groups.length }}</span></h1>
+            <h1>
+                🐋南哪选课助手
+                <span v-if="groups.length > 0" style="font-size: 0.8em; margin-left: 10px; font-weight: normal;">当前组数: {{ groups.length }}</span>
+                <span style="font-size: 0.7rem; font-weight: normal; margin-left: 15px; opacity: 0.8;">本app所有内容在本地处理,仅获取必要的cookie,不存储用户密码.所有内容只是算法生成,不作为完全参考.</span>
+            </h1>
             <div>
                 <button @click="saveSession" class="secondary" style="margin-right: 10px;">保存进度</button>
                 <button @click="newSession" class="danger">重置</button>
@@ -230,11 +234,12 @@
                 <div v-else>
                     <h3>推荐方案 (共 {{ schedules.length }} 个)</h3>
                     <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px;">
-                        <button v-for="(sch, idx) in schedules.slice(0, 10)"
+                        <button v-for="(sch, idx) in schedules.slice(0, 20)"
                                 :key="idx"
                                 :class="currentScheduleIdx === idx ? '' : 'secondary'"
-                                @click="currentScheduleIdx = idx">
-                            方案 {{ idx + 1 }} <small>({{ sch.score }}分)</small>
+                                @click="currentScheduleIdx = idx"
+                                style="flex-shrink: 0;">
+                            方案 {{ idx + 1 }} <small>({{ parseInt(sch.score) }}分)</small>
                         </button>
                     </div>
 
@@ -243,6 +248,24 @@
                             <h2 style="margin:0;">第 {{ currentScheduleIdx + 1 }} 方案课表</h2>
                             <div>
                                 周次: <input type="number" v-model.number="currentWeek" min="1" max="25" style="width: 60px;">
+                            </div>
+                        </div>
+
+                        <!-- Statistics Section -->
+                        <div v-if="schedules[currentScheduleIdx]" style="margin-bottom: 15px; padding: 10px; background: #f0f4c3; border-radius: 4px; font-size: 0.9rem;">
+                            <div style="display: flex; gap: 20px; flex-wrap: wrap; font-weight: bold; margin-bottom: 5px;">
+                                <span>总学分: {{ schedules[currentScheduleIdx].stats?.total_credits }}</span>
+                                <span>总学时: {{ schedules[currentScheduleIdx].stats?.total_hours }}</span>
+                                <span>周平均学时: {{ schedules[currentScheduleIdx].stats?.avg_weekly_hours }}</span>
+                                <span>活跃周次: {{ schedules[currentScheduleIdx].stats?.week_span }}</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: #555;">
+                                <strong>评分详情:</strong>
+                                基准分: 100
+                                <span v-for="(val, key) in schedules[currentScheduleIdx].score_details" :key="key" :style="{color: val < 0 ? 'red' : 'green', marginLeft: '10px'}">
+                                    {{ key }}: {{ val > 0 ? '+' : ''}}{{ val }}
+                                </span>
+                                <span style="margin-left: 10px; font-weight: bold;">= {{ parseInt(schedules[currentScheduleIdx].score) }}</span>
                             </div>
                         </div>
 
