@@ -9,8 +9,24 @@ from backend.ranker import ScheduleRanker
 
 class Api:
     def __init__(self):
-        self.client = NJUCourseClient() # Auto loads cookie
+        self.window = None # Will be set after window creation
+        # Pass send_toast as callback, but wait until window is ready
+        # We need a lambda that checks if window exists
+        self.client = NJUCourseClient(toast_callback=self.send_toast_safe)
         self.session_manager = SessionManager()
+
+    def send_toast_safe(self, msg, type='info'):
+        """Callback for backend components to send toasts"""
+        if self.window:
+            # evaluate_js must be thread-safe. webview usually handles this,
+            # but sometimes calls from other threads might need dispatch.
+            # In pywebview, evaluate_js is thread-safe.
+            try:
+                # Escape quotes in msg
+                safe_msg = msg.replace("'", "\\'").replace('"', '\\"')
+                self.window.evaluate_js(f"showToast('{safe_msg}', '{type}')")
+            except Exception as e:
+                print(f"[Api] Failed to send toast: {e}")
 
     def search(self, params):
         """
@@ -77,9 +93,11 @@ class Api:
             prefs = json.loads(prefs_json)
             path = self.session_manager.save_session("last_session", groups, prefs)
             print(f"[Api] Saved to {path}")
+            self.send_toast_safe("会话保存成功", "success")
             return True
         except Exception as e:
             print(f"[Api] Save Error: {e}")
+            self.send_toast_safe(f"保存失败: {e}", "error")
             return False
         
     def load_session(self, filename="last_session"):
@@ -87,9 +105,11 @@ class Api:
             data = self.session_manager.load_session(filename)
             if data:
                 print(f"[Api] Loaded session with {len(data.get('groups', []))} groups")
+                # self.send_toast_safe(f"已恢复上次会话 ({len(data.get('groups', []))} 组)", "info")
             return data
         except Exception as e:
             print(f"[Api] Load Error: {e}")
+            self.send_toast_safe(f"加载会话失败: {e}", "error")
             return None
 
 if __name__ == "__main__":
@@ -105,4 +125,5 @@ if __name__ == "__main__":
         js_api=api,
         width=1200, height=800
     )
+    api.window = window # Assign window to api for callbacks
     webview.start(debug=False)

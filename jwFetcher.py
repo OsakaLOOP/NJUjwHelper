@@ -118,10 +118,15 @@ class ScheduleBitmapper:
 
 class LoginInterceptor:
     """基于 pywebview 的登录与 Cookie 嗅探"""
-    def __init__(self):
+    def __init__(self, toast_callback=None):
         self._cookies = None
         self._window = None
         self.cookie_manager = CookieManager()
+        self.toast_callback = toast_callback
+
+    def _toast(self, msg, type='info'):
+        if self.toast_callback:
+            self.toast_callback(msg, type)
 
     def _check_login_status(self, window):
         # 轮询检测 URL 是否包含业务系统特征且不包含认证中心特征
@@ -159,6 +164,7 @@ class LoginInterceptor:
                         print(f"[Error] Parsing cookie failed: {c} - {e}")
                 self._cookies = "; ".join(pairs)
                 self.cookie_manager.save_cookie(self._cookies)
+                self._toast("登录成功，Cookie已更新", "success")
                 break
         self._window.destroy()
         
@@ -175,17 +181,21 @@ class LoginInterceptor:
             # If redirected to authserver, it's invalid
             if "authserver.nju.edu.cn" in resp.url:
                 print(f"[Cookie] Invalid: Redirected to login page.")
+                self._toast("会话已过期，需要重新登录", "error")
                 return False
 
             # Double check content just in case
             if "统一身份认证" in resp.text or "账号登录" in resp.text:
                 print(f"[Cookie] Invalid: Login markers found in response.")
+                self._toast("会话无效，需要重新登录", "error")
                 return False
 
             print(f"[Cookie] Valid.")
+            # self._toast("会话有效", "success") # Too noisy? Maybe
             return True
         except Exception as e:
             print(f"[Cookie] Validation network error: {e}")
+            self._toast(f"网络错误: {e}", "error")
             return False
         
     def get_cookie(self):
@@ -212,9 +222,10 @@ class LoginInterceptor:
         return self._cookies
 
 class NJUCourseClient:
-    def __init__(self, cookie_str=None):
+    def __init__(self, cookie_str=None, toast_callback=None):
+        self.toast_callback = toast_callback
         if not cookie_str:
-             interceptor = LoginInterceptor()
+             interceptor = LoginInterceptor(toast_callback=toast_callback)
              cookie_str = interceptor.get_cookie()
              if not cookie_str:
                  cookie_str = interceptor.force_login()
@@ -233,6 +244,10 @@ class NJUCourseClient:
         """辅助：补全后端强制要求的 value_display"""
         mapping = {"1": "鼓楼校区", "2": "浦口校区", "3": "仙林校区", "4": "苏州校区"}
         return mapping.get(code, "未知校区")
+
+    def _toast(self, msg, type='info'):
+        if self.toast_callback:
+            self.toast_callback(msg, type)
 
     def search(self, course_name=None, course_code=None, campus="1", semester="2025-2026-1", match_mode="OR"):
         """
@@ -301,6 +316,7 @@ class NJUCourseClient:
 
         # 2. 分页循环
         print(f"[*] 开始查询: Name={course_name}, Code={course_code}, Campus={campus}...")
+        self._toast("正在搜索...", "info")
         
         # 用于去重 (计算 content hash)
         seen_hashes = set()
@@ -324,7 +340,11 @@ class NJUCourseClient:
                 
                 if page == 1:
                     print(f"    -> 命中总数: {total_size}")
-                    if total_size == 0: break
+                    if total_size == 0:
+                         self._toast("未找到任何课程", "info")
+                         break
+                    else:
+                         self._toast(f"找到 {total_size} 条结果，正在下载...", "info")
                 
                 # 数据清洗与二进制化
                 for row in rows:
