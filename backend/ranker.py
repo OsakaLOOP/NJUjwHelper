@@ -21,7 +21,13 @@ class ScheduleRanker:
             cb = course.get('schedule_bitmaps', [])
             for w in range(len(cb)):
                 if w < len(full_bitmap):
-                    full_bitmap[w] |= cb[w]
+                    val = cb[w]
+                    if isinstance(val, str):
+                        try:
+                            val = int(val)
+                        except:
+                            val = 0
+                    full_bitmap[w] |= val
 
         # 1. Avoid Early Morning (Nodes 1-2 -> Bits 0-1, 13-14, etc.)
         if preferences.get('avoid_early_morning'):
