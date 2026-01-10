@@ -234,7 +234,7 @@
             <div v-show="currentView==='results'" class="card">
                 <div v-if="schedules.length === 0">请先生成方案。</div>
                 <div v-else>
-                    <h3>推荐方案 (共 {{ schedules.length }} 个)</h3>
+                    <h3>推荐方案 (显示 {{ schedules.length }} 个 / 共 {{ totalCount }} 个可能方案)</h3>
                     <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px;">
                         <button v-for="(sch, idx) in schedules.slice(0, 20)"
                                 :key="idx"

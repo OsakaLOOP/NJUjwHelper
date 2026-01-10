@@ -21,6 +21,7 @@ createApp({
         const hasSearched = ref(false);
 
         const schedules = ref([]);
+        const totalCount = ref(0);
         const currentScheduleIdx = ref(0);
         const currentWeek = ref(1);
         const toastRef = ref(null);
@@ -255,6 +256,7 @@ createApp({
                         showToast("错误: " + res.error, 'error');
                     } else {
                         schedules.value = res.schedules;
+                        totalCount.value = res.total_found;
                         currentView.value = 'results';
                         currentScheduleIdx.value = 0;
                         showToast(`成功生成 ${res.schedules.length} 个方案`, 'success');
@@ -274,6 +276,7 @@ createApp({
                             courses: [groups.value[0].candidates[0]]
                         }
                     ];
+                    totalCount.value = 1;
                     currentView.value = 'results';
                 }
             } catch (e) {
@@ -472,7 +475,7 @@ createApp({
 
         return {
             currentView, loading, searchParams, searchResults,
-            groups, preferences, schedules, currentScheduleIdx, currentWeek,
+            groups, preferences, schedules, totalCount, currentScheduleIdx, currentWeek,
             filterText, hasSearched, filteredSearchResults,
             doSearch, createGroup, getGroupName, getActiveCount, removeGroup,
             generateSchedules, getCell, downloadImage, saveSession, newSession, toastRef,

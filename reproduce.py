@@ -23,8 +23,8 @@ def test_duplication_repro():
     print(f"Loaded {len(groups)} groups.")
     
     # Run solver
-    schedules = ScheduleSolver.generate_schedules(groups, max_results=10)
-    print(f"Generated {len(schedules)} schedules.")
+    schedules, total_count = ScheduleSolver.generate_schedules(groups, max_results=10)
+    print(f"Generated {len(schedules)} schedules (Total found: {total_count}).")
 
     if not schedules:
         print("No schedules found! Checking if candidates are selected...")
