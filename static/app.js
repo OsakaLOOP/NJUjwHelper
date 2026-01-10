@@ -11,7 +11,10 @@ createApp({
             avoid_early_morning: false,
             avoid_weekend: false,
             compactness: 'none',
-            max_daily_load: 0
+            max_daily_load: 0,
+            day_max_limit_enabled: false,
+            day_max_limit_value: 4,
+            day_max_limit_days: [true, true, true, true, true, true, true]
         });
 
         const filterText = ref('');
@@ -87,6 +90,18 @@ createApp({
 
             const allChecked = visible.every(c => c.checked);
             visible.forEach(c => c.checked = !allChecked);
+        };
+
+        const toggleAllDays = (select) => {
+            for(let i=0; i<7; i++) {
+                preferences.day_max_limit_days[i] = select;
+            }
+        };
+
+        const invertDays = () => {
+             for(let i=0; i<7; i++) {
+                preferences.day_max_limit_days[i] = !preferences.day_max_limit_days[i];
+            }
         };
 
         // --- Import Logic ---
@@ -332,7 +347,7 @@ createApp({
             filterText, hasSearched, filteredSearchResults,
             doSearch, createGroup, getGroupName, getActiveCount, toggleCandidate, removeGroup,
             generateSchedules, getCell, downloadImage, saveSession, newSession, toastRef,
-            toggleSelectAll,
+            toggleSelectAll, toggleAllDays, invertDays,
             showImportModal, importText, isImporting, importStatus, importParams,
             openImportModal, closeImportModal, startBatchImport
         };
