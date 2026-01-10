@@ -109,4 +109,34 @@ class ScheduleRanker:
                         overload += (count - limit)
             score -= overload * 5.0 # Heavy penalty
 
+        # 5. Day Max Limit (Specific Days)
+        if preferences.get('day_max_limit_enabled'):
+            limit = preferences.get('day_max_limit_value', 4)
+            target_days = preferences.get('day_max_limit_days', []) # List of bools, idx 0=Mon
+
+            penalty = 0
+            # Ensure target_days has 7 elements
+            if len(target_days) < 7:
+                target_days = target_days + [False] * (7 - len(target_days))
+
+            for w in range(1, 26):
+                mask = full_bitmap[w]
+                if mask == 0: continue
+
+                for d in range(7):
+                    # Check if this day is selected for limiting
+                    if not target_days[d]:
+                        continue
+
+                    day_bits = (mask >> (d * 13)) & 0x1FFF
+                    count = bin(day_bits).count('1')
+
+                    if count > limit:
+                        # Penalty calculation
+                        # If limit is 0 (day off), any class is bad.
+                        diff = count - limit
+                        penalty += diff * 50.0 # Very heavy penalty
+
+            score -= penalty
+
         return score

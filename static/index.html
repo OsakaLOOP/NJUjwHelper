@@ -178,7 +178,37 @@
                         <option value="low">分散 (均匀分布)</option>
                     </select>
                 </div>
-                <div style="margin-top: 10px;">
+
+                <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;">
+                    <label style="font-weight: bold;">
+                        <input type="checkbox" v-model="preferences.day_max_limit_enabled">
+                        日最多节数限制
+                    </label>
+
+                    <div v-if="preferences.day_max_limit_enabled" style="margin-top: 10px; margin-left: 20px; padding: 10px; background: #f9f9f9; border-radius: 4px;">
+                        <div style="margin-bottom: 10px;">
+                            限制为:
+                            <select v-model.number="preferences.day_max_limit_value" style="width: auto; display: inline-block;">
+                                <option :value="0">0 (没课)</option>
+                                <option :value="2">2</option>
+                                <option :value="4">4</option>
+                                <option :value="6">6</option>
+                            </select> 节
+                        </div>
+                        <div>
+                            适用日期:
+                            <button class="secondary" style="padding: 2px 8px; margin-right: 5px; font-size: 0.8rem;" @click="toggleAllDays(true)">全选</button>
+                            <button class="secondary" style="padding: 2px 8px; font-size: 0.8rem;" @click="invertDays()">反选</button>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 5px;">
+                            <label v-for="(day, idx) in ['一','二','三','四','五','六','日']" :key="idx" style="cursor: pointer;">
+                                <input type="checkbox" v-model="preferences.day_max_limit_days[idx]"> 周{{ day }}
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px;">
                     <button @click="generateSchedules" style="width: 100%; padding: 15px; font-size: 1.1rem;">生成课表方案</button>
                 </div>
             </div>
