@@ -11,7 +11,10 @@ createApp({
             avoid_early_morning: false,
             avoid_weekend: false,
             compactness: 'none',
-            max_daily_load: 0
+            max_daily_load: 0,
+            day_max_limit_enabled: false,
+            day_max_limit_value: 4,
+            day_max_limit_days: [true, true, true, true, true, true, true]
         });
 
         const filterText = ref('');
@@ -87,6 +90,18 @@ createApp({
 
             const allChecked = visible.every(c => c.checked);
             visible.forEach(c => c.checked = !allChecked);
+        };
+
+        const toggleAllDays = (select) => {
+            for(let i=0; i<7; i++) {
+                preferences.day_max_limit_days[i] = select;
+            }
+        };
+
+        const invertDays = () => {
+             for(let i=0; i<7; i++) {
+                preferences.day_max_limit_days[i] = !preferences.day_max_limit_days[i];
+            }
         };
 
         // --- Import Logic ---
@@ -213,15 +228,6 @@ createApp({
         const getActiveCount = (group) => group.candidates.filter(c => c.selected).length;
 
         const toggleCandidate = (group, idx) => {
-           // No-op here if using v-model, but let's keep it or remove it.
-           // Since we switch to v-model in the template, this function might become obsolete
-           // OR we can keep it if we want to programmatically toggle.
-           // But the previous implementation used indices.
-           // The template currently calls it. I will update the template to use v-model.
-           // So I can remove this function or just leave a placeholder.
-           // Actually, let's just make it toggle the boolean for the candidate at that index if needed,
-           // but v-model is cleaner. I'll remove it from the return object if I don't use it.
-           // But to be safe, I'll update it to toggle boolean.
            const c = group.candidates[idx];
            if (c) c.selected = !c.selected;
         };
@@ -301,16 +307,49 @@ createApp({
             }
         };
 
+        // Hotkey Handling
+        const handleKeydown = (e) => {
+            const tag = e.target.tagName.toLowerCase();
+            const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
+
+            if (e.key === 'Escape') {
+                if (showImportModal.value) {
+                    closeImportModal();
+                    return;
+                }
+            }
+
+            if (e.key === 'Enter') {
+                if (showImportModal.value) {
+                    if (!e.shiftKey && tag !== 'textarea') {
+                           startBatchImport();
+                    }
+                    return;
+                }
+
+                if (currentView.value === 'search') {
+                    // Trigger search
+                    doSearch();
+                } else if (currentView.value === 'planning') {
+                    // Trigger generate
+                    generateSchedules();
+                }
+            }
+        };
+
         let isInitialized = false;
 
         const init = async () => {
             if (isInitialized) return;
             isInitialized = true;
+            console.log("App init called");
 
             if (window.pywebview) {
                 try {
+                    console.log("pywebview API found, loading session...");
                     const data = await window.pywebview.api.load_session('last_session');
                     if (data) {
+                        console.log("Session loaded successfully");
                         if (data.groups) groups.value = data.groups;
                         if (data.preferences) Object.assign(preferences, data.preferences);
 
@@ -319,14 +358,18 @@ createApp({
                         } else {
                             currentView.value = 'search';
                         }
+                    } else {
+                        console.log("No previous session data found.");
                     }
                 } catch (e) {
-                    console.error("Init error", e);
+                    console.error("Init error (API call failed):", e);
                 }
             }
         };
 
         onMounted(() => {
+            window.addEventListener('keydown', handleKeydown);
+
             if (window.pywebview) {
                 init();
             } else {
@@ -340,7 +383,7 @@ createApp({
             filterText, hasSearched, filteredSearchResults,
             doSearch, createGroup, getGroupName, getActiveCount, toggleCandidate, removeGroup,
             generateSchedules, getCell, downloadImage, saveSession, newSession, toastRef,
-            toggleSelectAll,
+            toggleSelectAll, toggleAllDays, invertDays,
             showImportModal, importText, isImporting, importStatus, importParams,
             openImportModal, closeImportModal, startBatchImport
         };
