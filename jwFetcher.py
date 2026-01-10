@@ -127,16 +127,41 @@ class LoginInterceptor:
         self._window.destroy()
         
     
+    def validate_cookie(self, cookie_str):
+        print("[Cookie] Checking validity...")
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+            "Cookie": cookie_str
+        }
+        try:
+            # Follow redirects to see if we land on authserver
+            resp = requests.get(GATEWAY_URL, headers=headers, timeout=10, allow_redirects=True)
+
+            # If redirected to authserver, it's invalid
+            if "authserver.nju.edu.cn" in resp.url:
+                print(f"[Cookie] Invalid: Redirected to login page.")
+                return False
+
+            # Double check content just in case
+            if "统一身份认证" in resp.text or "账号登录" in resp.text:
+                print(f"[Cookie] Invalid: Login markers found in response.")
+                return False
+
+            print(f"[Cookie] Valid.")
+            return True
+        except Exception as e:
+            print(f"[Cookie] Validation network error: {e}")
+            return False
+
     def get_cookie(self):
         # Try loading existing cookie first
         existing_cookie = self.cookie_manager.load_cookie()
         if existing_cookie:
-            # Validate cookie? For now assume it might be valid, if requests fail we can re-login
-            # But the requirement says "auto load... but ehallapp might expire".
-            # We will return it. The client usage should handle expiration (e.g. by checking response)
-            # However, for this function, we just return what we have or start login.
-            # To be robust, let's just return it. The main app logic should handle re-login if needed.
-            return existing_cookie
+            if self.validate_cookie(existing_cookie):
+                return existing_cookie
+            else:
+                print("[Cookie] Expired or invalid. Clearing...")
+                self.cookie_manager.clear_cookie()
 
         return self.force_login()
 
