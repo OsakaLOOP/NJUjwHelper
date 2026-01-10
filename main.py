@@ -79,22 +79,53 @@ class Api:
             for course in s:
                 total_credits += course.get('credit', 0)
 
+                # Track active weeks for this course
+                course_weeks = set()
+
+                # Try getting from sessions first
+                sessions = course.get('sessions', [])
+                if sessions:
+                    for sess in sessions:
+                        if sess['weeks']:
+                            course_weeks.update(sess['weeks'])
+                else:
+                    # Fallback: scan schedule_bitmaps
+                    # index 1..len
+                    bitmaps = course.get('schedule_bitmaps', [])
+                    for w_idx in range(1, len(bitmaps)):
+                        val = bitmaps[w_idx]
+                        if isinstance(val, str):
+                            try:
+                                val = int(val)
+                            except: val = 0
+                        if val > 0:
+                            course_weeks.add(w_idx)
+
+                # Update global stats
+                if course_weeks:
+                    has_classes = True
+                    min_week = min(min_week, min(course_weeks))
+                    max_week = max(max_week, max(course_weeks))
+
                 # Use official hours if available, else calculate
                 if course.get('hours', 0) > 0:
                     total_hours += course.get('hours')
                 else:
-                    # Calculate hours from sessions fallback
-                    for sess in course.get('sessions', []):
-                        p_len = sess['end'] - sess['start'] + 1
-                        w_len = len(sess['weeks'])
-                        total_hours += (p_len * w_len)
-
-                # Update week span (always needed)
-                for sess in course.get('sessions', []):
-                    if sess['weeks']:
-                        has_classes = True
-                        min_week = min(min_week, min(sess['weeks']))
-                        max_week = max(max_week, max(sess['weeks']))
+                    # Calculate hours from sessions if available
+                    if sessions:
+                        for sess in sessions:
+                            p_len = sess['end'] - sess['start'] + 1
+                            w_len = len(sess['weeks'])
+                            total_hours += (p_len * w_len)
+                    else:
+                        # Fallback: Count bits in bitmaps for active weeks
+                        bitmaps = course.get('schedule_bitmaps', [])
+                        for w in course_weeks:
+                            if w < len(bitmaps):
+                                val = bitmaps[w]
+                                if isinstance(val, str):
+                                    val = int(val)
+                                total_hours += bin(val).count('1')
 
             avg_weekly = 0.0
             if has_classes and max_week >= min_week:
