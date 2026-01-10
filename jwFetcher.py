@@ -338,10 +338,23 @@ class NJUCourseClient:
                     # 调用正则解析器
                     bitmap, sessions = ScheduleBitmapper.generate_bitmap(raw_loc)
                     
+                    # Try to extract credit (XF) and hours (XS)
+                    try:
+                        credit = float(row.get("XF", 0))
+                    except:
+                        credit = 0.0
+
+                    try:
+                        hours = float(row.get("XS", 0))
+                    except:
+                        hours = 0.0
+
                     item = {
                         "name": row.get("KCM"),
                         "code": row.get("KCH"),
                         "teacher": teacher,
+                        "credit": credit,
+                        "hours": hours,
                         "location_text": raw_loc,
                         "school": row.get("PKDWDM_DISPLAY") or row.get("KKDWDM_DISPLAY"),
                         # 输出二进制列表 (核心)

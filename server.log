@@ -1,0 +1,16 @@
+127.0.0.1 - - [10/Jan/2026 07:22:19] "GET /static/index.html HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:22:19] "GET /static/vue.global.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:22:19] "GET /static/app.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:22:19] "GET /static/html2canvas.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:23:49] "GET /static/index.html HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:23:49] "GET /static/app.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:23:49] "GET /static/html2canvas.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:23:49] "GET /static/vue.global.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:24:21] "GET /static/index.html HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:24:21] "GET /static/app.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:24:21] "GET /static/vue.global.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:24:21] "GET /static/html2canvas.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:24:50] "GET /static/index.html HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:24:50] "GET /static/vue.global.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:24:50] "GET /static/app.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Jan/2026 07:24:50] "GET /static/html2canvas.min.js HTTP/1.1" 200 -
