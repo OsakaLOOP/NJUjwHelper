@@ -77,6 +77,15 @@ class Api:
             print(f"[Api] Save Error: {e}")
             return False
 
+    def load_session(self, filename):
+        print(f"[Api] Loading session: {filename}")
+        try:
+            data = self.session_manager.load_session(filename)
+            return data
+        except Exception as e:
+            print(f"[Api] Load Error: {e}")
+            return None
+
 if __name__ == "__main__":
     api = Api()
 
