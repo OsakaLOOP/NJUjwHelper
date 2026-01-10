@@ -198,6 +198,7 @@ class ScheduleSolver:
         current_bitmap = [0] * 30
 
         counter = itertools.count()
+        total_found_container = [0]
 
         # Pre-calculate group order?
         # Heuristic: Process groups with FEWEST options first (Fail Fast).
@@ -216,6 +217,8 @@ class ScheduleSolver:
         def backtrack(group_idx, current_schedule_meta):
             if group_idx == len(meta_groups):
                 # Found a valid schedule
+                total_found_container[0] += 1
+
                 # Reconstruct final schedule but include alternatives info
                 final_schedule = []
                 for m in current_schedule_meta:
@@ -281,7 +284,7 @@ class ScheduleSolver:
         backtrack(0, [])
 
         sorted_results = sorted(top_n_heap, key=lambda x: x[0], reverse=True)
-        return [item[2] for item in sorted_results]
+        return [item[2] for item in sorted_results], total_found_container[0]
 
     @staticmethod
     def is_valid_combination(courses):

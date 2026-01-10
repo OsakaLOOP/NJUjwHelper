@@ -56,8 +56,8 @@ class Api:
 
         # 2. Generate
         # Pass preferences to solver for DFS pruning/ordering
-        raw_schedules = ScheduleSolver.generate_schedules(groups, preferences=preferences)
-        print(f"[Api] Found {len(raw_schedules)} valid schedules")
+        raw_schedules, total_count = ScheduleSolver.generate_schedules(groups, preferences=preferences)
+        print(f"[Api] Found {len(raw_schedules)} top schedules (from {total_count} total explored)")
 
         # 3. Rank and Enrich
         ranker = ScheduleRanker()
@@ -117,7 +117,7 @@ class Api:
         # Sort desc
         ranked.sort(key=lambda x: x['score'], reverse=True)
 
-        return {'schedules': ranked}
+        return {'schedules': ranked, 'total_found': total_count}
 
     def save_image_dialog(self, base64_data):
         import base64
