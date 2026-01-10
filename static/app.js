@@ -301,29 +301,97 @@ createApp({
             }
         };
 
-        const init = async () => {
-            if (window.pywebview) {
-                try {
-                    const data = await window.pywebview.api.load_session();
-                    if (data) {
-                        if (data.groups) groups.value = data.groups;
-                        if (data.preferences) Object.assign(preferences, data.preferences);
+        // Hotkey Handling
+        const handleKeydown = (e) => {
+            // Ignore if in input/textarea (unless it's a special global key like Esc? No, let's keep it standard)
+            // Actually, Enter in search input should trigger search.
+            const tag = e.target.tagName.toLowerCase();
+            const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
 
-                        if (groups.value.length > 0) {
-                            currentView.value = 'planning';
-                        } else {
-                            currentView.value = 'search';
+            if (e.key === 'Escape') {
+                if (showImportModal.value) {
+                    closeImportModal();
+                    return;
+                }
+            }
+
+            if (e.key === 'Enter') {
+                if (showImportModal.value) {
+                    // In import modal
+                    if (!e.shiftKey) { // Allow shift+enter for new lines if needed, or just block it?
+                        // Actually textarea needs enter. Let's make Ctrl+Enter to submit?
+                        // Or just checking if focus is NOT in textarea?
+                        // User said "Unique most important operation".
+                        // If in Import modal, Enter usually means "Start Import" unless typing in textarea.
+                        // Let's safe guard: if active element is not the textarea, or using Ctrl+Enter.
+                        // For simplicity as requested "Enter hotkey", let's assume if specific contexts:
+
+                        // If focus is NOT in textarea, trigger import.
+                        if (tag !== 'textarea') {
+                           startBatchImport();
                         }
                     }
-                } catch (e) {
-                    console.error("Init error", e);
+                    return;
+                }
+
+                if (currentView.value === 'search') {
+                    // Trigger search
+                    doSearch();
+                } else if (currentView.value === 'planning') {
+                    // Trigger generate
+                    generateSchedules();
                 }
             }
         };
 
+        const init = async () => {
+            console.log("App init called");
+            // Wait for pywebview
+            let attempts = 0;
+            const waitForApi = async () => {
+                if (window.pywebview) {
+                    try {
+                        console.log("pywebview API found, loading session...");
+                        const data = await window.pywebview.api.load_session();
+                        if (data) {
+                            console.log("Session loaded successfully");
+                            if (data.groups) groups.value = data.groups;
+                            if (data.preferences) Object.assign(preferences, data.preferences);
+
+                            if (groups.value.length > 0) {
+                                currentView.value = 'planning';
+                            } else {
+                                currentView.value = 'search';
+                            }
+                        } else {
+                            console.log("No previous session data found.");
+                        }
+                    } catch (e) {
+                        console.error("Init error (API call failed):", e);
+                    }
+                } else {
+                    if (attempts < 10) {
+                        attempts++;
+                        console.log("pywebview not ready, retrying...", attempts);
+                        setTimeout(waitForApi, 200);
+                    } else {
+                        console.error("pywebview failed to load after timeout");
+                    }
+                }
+            };
+            waitForApi();
+        };
+
         onMounted(() => {
-            window.addEventListener('pywebviewready', init);
-            setTimeout(init, 500); // Fallback
+            window.addEventListener('keydown', handleKeydown);
+            // We use a robust polling in init(), so we just call it once.
+            // pywebviewready is also good, but polling covers the case where event fired before mount.
+            window.addEventListener('pywebviewready', () => {
+                console.log("pywebviewready event received");
+                // Reset attempts if event fires
+                init();
+            });
+            init();
         });
 
         return {

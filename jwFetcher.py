@@ -55,28 +55,51 @@ class ScheduleBitmapper:
         # 处理多个时间段，通常用分号分隔
         # 还要过滤掉地点信息，只保留时间部分，防止正则误判
         # 简单策略：直接对整个字符串扫正则
-        matches = ScheduleBitmapper.REGEX_PATTERN.finditer(location_text)
+        # 同时检测 (单) 或 (双)
+        # Note: 正则无法直接捕获匹配段落后面的 (单)/(双) 标记，因为中间可能夹杂地点等信息
+        # 改进策略: Split by space or comma, then process each segment if it contains "周x"
+        # 简单起见，我们还是用 finditer，但是我们尝试在 match 对象的周围寻找 (单)/(双)
+        # 或者，更粗暴的：如果整个 location_text 包含 单/双，可能不太对，因为可能有 "周一(单) 周二(双)"
+        # 所以必须分段处理。
         
-        for match in matches:
-            day_char, start_node, end_node, week_range_str = match.groups()
+        # Split by comma or semicolon to separate different time rules roughly
+        # 观察样本: "周五 5-6节 1-16周 教103, 周三 3-4节 1-15周(单) 教103"
+        segments = re.split(r'[,;]', location_text)
+
+        for seg in segments:
+            matches = list(ScheduleBitmapper.REGEX_PATTERN.finditer(seg))
+            if not matches:
+                continue
+
+            is_odd_only = "(单)" in seg
+            is_even_only = "(双)" in seg
             
-            day_idx = WEEKDAY_MAP.get(day_char, 0)
-            s_node = int(start_node)
-            e_node = int(end_node)
-            active_weeks = ScheduleBitmapper.parse_week_ranges(week_range_str)
-            
-            # 1. 计算这一条时间规则在“单周”内的掩码 (Base Mask)
-            segment_mask = 0
-            for node in range(s_node, e_node + 1):
-                # 假设每天13节课，位置 = 天*13 + (节-1)
-                # Bit 0 = 周一第1节
-                bit_pos = (day_idx * 13) + (node - 1)
-                segment_mask |= (1 << bit_pos)
-            
-            # 2. 将掩码填充到具体的周次中
-            for w in active_weeks:
-                if 0 < w <= max_weeks:
-                    semester_schedule[w] |= segment_mask
+            for match in matches:
+                day_char, start_node, end_node, week_range_str = match.groups()
+
+                day_idx = WEEKDAY_MAP.get(day_char, 0)
+                s_node = int(start_node)
+                e_node = int(end_node)
+                active_weeks = ScheduleBitmapper.parse_week_ranges(week_range_str)
+
+                # 1. 计算这一条时间规则在“单周”内的掩码 (Base Mask)
+                segment_mask = 0
+                for node in range(s_node, e_node + 1):
+                    # 假设每天13节课，位置 = 天*13 + (节-1)
+                    # Bit 0 = 周一第1节
+                    bit_pos = (day_idx * 13) + (node - 1)
+                    segment_mask |= (1 << bit_pos)
+
+                # 2. 将掩码填充到具体的周次中
+                for w in active_weeks:
+                    if 0 < w <= max_weeks:
+                        # 检查单双周限制
+                        if is_odd_only and (w % 2 == 0):
+                            continue # Skip even weeks
+                        if is_even_only and (w % 2 != 0):
+                            continue # Skip odd weeks
+
+                        semester_schedule[w] |= segment_mask
                     
         return semester_schedule
 
@@ -242,6 +265,9 @@ class NJUCourseClient:
         # 2. 分页循环
         print(f"[*] 开始查询: Name={course_name}, Code={course_code}, Campus={campus}...")
         
+        # 用于去重 (计算 content hash)
+        seen_hashes = set()
+
         while True:
             form_data = {
                 "CXYH": "true", # 外部 Body 也要带
@@ -265,25 +291,47 @@ class NJUCourseClient:
                 
                 # 数据清洗与二进制化
                 for row in rows:
-                    raw_loc = row.get("YPSJDD", "")
+                    raw_loc = row.get("YPSJDD", "") or ""
+                    teacher = row.get("SKJS") or ""
+
+                    # 过滤 1: 老师和地点全为空 (包括空白字符)
+                    if not teacher.strip() and not raw_loc.strip():
+                        continue
+
                     # 调用正则解析器
                     bitmap = ScheduleBitmapper.generate_bitmap(raw_loc)
                     
                     item = {
                         "name": row.get("KCM"),
                         "code": row.get("KCH"),
-                        "teacher": row.get("SKJS"),
+                        "teacher": teacher,
                         "location_text": raw_loc,
                         "school": row.get("PKDWDM_DISPLAY") or row.get("KKDWDM_DISPLAY"),
                         # 输出二进制列表 (核心)
                         "schedule_bitmaps": bitmap 
                     }
+
+                    # 过滤 2: 完全一致项目去重
+                    # 构造唯一标识 tuple (name, code, teacher, location_text, school)
+                    # schedule_bitmaps 是派生数据，不需要加入 hash
+                    item_id = (item["name"], item["code"], item["teacher"], item["location_text"], item["school"])
+                    if item_id in seen_hashes:
+                        continue
+
+                    seen_hashes.add(item_id)
                     all_data.append(item)
                 
-                print(f"    -> Page {page} download complete ({len(rows)} items)")
+                print(f"    -> Page {page} download complete ({len(rows)} items processed)")
                 
                 # 判断是否还有下一页
-                if len(all_data) >= total_size:
+                # 注意：因为我们进行了过滤，all_data 的长度可能小于 total_size
+                # 必须依赖分页逻辑本身 (page * page_size >= total_size) 来判断结束
+                # 或者简单的：如果 rows 为空，或者 rows 小于 page_size 且是最后一页...
+                # 但标准做法是检查总数。
+                # 坑点：如果全被过滤了，all_data 增长慢，不能用 len(all_data) >= total_size 判断。
+                # 应该用 (page * page_size) >= total_size
+
+                if (page * page_size) >= total_size:
                     break
                 
                 page += 1
