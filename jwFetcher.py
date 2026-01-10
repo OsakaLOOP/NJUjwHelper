@@ -181,13 +181,13 @@ class LoginInterceptor:
             # If redirected to authserver, it's invalid
             if "authserver.nju.edu.cn" in resp.url:
                 print(f"[Cookie] Invalid: Redirected to login page.")
-                self._toast("会话已过期，需要重新登录", "error")
+                self._toast("会话已过期, 请手动删除./Cookies/cookies.txt, 然后重新启动, 记得保存.", "error")
                 return False
 
             # Double check content just in case
             if "统一身份认证" in resp.text or "账号登录" in resp.text:
                 print(f"[Cookie] Invalid: Login markers found in response.")
-                self._toast("会话无效，需要重新登录", "error")
+                self._toast("会话无效，需要清除 cookie 并重新登录", "error")
                 return False
 
             print(f"[Cookie] Valid.")
