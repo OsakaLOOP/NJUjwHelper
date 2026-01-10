@@ -212,20 +212,6 @@ createApp({
 
         const getActiveCount = (group) => group.candidates.filter(c => c.selected).length;
 
-        const toggleCandidate = (group, idx) => {
-           // No-op here if using v-model, but let's keep it or remove it.
-           // Since we switch to v-model in the template, this function might become obsolete
-           // OR we can keep it if we want to programmatically toggle.
-           // But the previous implementation used indices.
-           // The template currently calls it. I will update the template to use v-model.
-           // So I can remove this function or just leave a placeholder.
-           // Actually, let's just make it toggle the boolean for the candidate at that index if needed,
-           // but v-model is cleaner. I'll remove it from the return object if I don't use it.
-           // But to be safe, I'll update it to toggle boolean.
-           const c = group.candidates[idx];
-           if (c) c.selected = !c.selected;
-        };
-
         const removeGroup = (idx) => groups.value.splice(idx, 1);
 
         const generateSchedules = async () => {
@@ -330,7 +316,7 @@ createApp({
             currentView, loading, searchParams, searchResults,
             groups, preferences, schedules, currentScheduleIdx, currentWeek,
             filterText, hasSearched, filteredSearchResults,
-            doSearch, createGroup, getGroupName, getActiveCount, toggleCandidate, removeGroup,
+            doSearch, createGroup, getGroupName, getActiveCount, removeGroup,
             generateSchedules, getCell, downloadImage, saveSession, newSession, toastRef,
             toggleSelectAll,
             showImportModal, importText, isImporting, importStatus, importParams,
