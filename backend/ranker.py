@@ -38,7 +38,7 @@ class ScheduleRanker:
 
                 if (mask & early_mask):
                     penalty += 1
-            score -= penalty * 0.5 # Small penalty per occurrence
+            score -= penalty * 2 # 严格惩罚早八
 
         # 2. Avoid Weekend (Days 5, 6)
         if preferences.get('avoid_weekend'):
@@ -90,9 +90,9 @@ class ScheduleRanker:
                     total_gaps += gap_count
 
             if preferences['compactness'] == 'high':
-                score -= total_gaps * 0.5 # Penalty for gaps
+                score -= total_gaps * 0.2 # Penalty for gaps
             else:
-                score += total_gaps * 0.5 # Bonus for gaps (spread)
+                score += total_gaps * 0.2 # Bonus for gaps (spread)
 
         # 4. Max Daily Load
         limit = preferences.get('max_daily_load')
