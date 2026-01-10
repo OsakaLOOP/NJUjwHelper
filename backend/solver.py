@@ -26,16 +26,26 @@ class ScheduleSolver:
                     continue # Empty group cannot conflict
 
                 all_conflict = True
+                first_reason = None
+
                 for ca in cands_a:
+                    pair_conflict = False
                     for cb in cands_b:
-                        if not ScheduleSolver.courses_conflict(ca, cb):
-                            all_conflict = False
+                        is_conf, details = ScheduleSolver.courses_conflict_with_details(ca, cb)
+                        if is_conf:
+                            pair_conflict = True
+                            if not first_reason:
+                                first_reason = details
+                        else:
+                            pair_conflict = False
                             break
-                    if not all_conflict:
+
+                    if not pair_conflict:
+                        all_conflict = False
                         break
 
                 if all_conflict:
-                    conflicts.append((i, j))
+                    conflicts.append((i, j, first_reason or "Unknown"))
 
         return conflicts
 
@@ -57,6 +67,28 @@ class ScheduleSolver:
             if (bmp_a[w] & bmp_b[w]) != 0:
                 return True
         return False
+
+    @staticmethod
+    def courses_conflict_with_details(course_a, course_b):
+        """
+        Checks if two courses conflict and returns details.
+        Returns: (bool, str_reason)
+        """
+        bmp_a = course_a.get('schedule_bitmaps', [])
+        bmp_b = course_b.get('schedule_bitmaps', [])
+        length = min(len(bmp_a), len(bmp_b))
+
+        for w in range(1, length):
+            overlap = bmp_a[w] & bmp_b[w]
+            if overlap != 0:
+                # Decode bits to find Day and Node
+                # Bit pos: Day(0-6)*13 + Node(0-12)
+                for bit in range(91): # 7*13=91
+                    if (overlap >> bit) & 1:
+                        day = (bit // 13) + 1
+                        node = (bit % 13) + 1
+                        return True, f"Week {w} Day {day} Node {node}"
+        return False, ""
 
     @staticmethod
     def generate_schedules(groups, max_results=1000):
