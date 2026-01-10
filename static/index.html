@@ -11,7 +11,7 @@
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         header { background: #630560; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         h1 { margin: 0; font-size: 1.2rem; display: flex; align-items: baseline; }
-        button { background: #03dac6; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button { background: #39C5BB; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         button:hover { opacity: 0.9; }
         button.secondary { background: #ccc; }
         button.danger { background: #b00020; color: white; }
@@ -60,7 +60,7 @@
             <h1>
                 🐋南哪选课助手
                 <span v-if="groups.length > 0" style="font-size: 0.8em; margin-left: 10px; font-weight: normal;">当前组数: {{ groups.length }}</span>
-                <span style="font-size: 0.7rem; font-weight: normal; margin-left: 15px; opacity: 0.8;">本app所有内容在本地处理, 仅获取必要的cookie, 不存储用户密码. 所有内容只是算法生成, 不作为完全参考. 数据源: 南大教服平台 - 全校课程表.</span>
+                <span style="font-size: 0.7rem; font-weight: normal; margin-left: 15px; opacity: 0.8;">本app所有内容在本地处理, 仅获取必要的cookie, 不存储用户密码. 所有内容仅为算法生成, 不作为完全参考.</span>
             </h1>
             <div>
                 <button @click="saveSession" class="secondary" style="margin-right: 10px;">保存进度</button>
@@ -73,7 +73,17 @@
                 <div :class="['nav-tab', currentView==='search'?'active':'']" @click="currentView='search'">1. 课程查询</div>
                 <div :class="['nav-tab', currentView==='planning'?'active':'']" @click="currentView='planning'">2. 规划 & 策略</div>
                 <div :class="['nav-tab', currentView==='results'?'active':'']" @click="currentView='results'">3. 结果 & 课表</div>
-                <div> <span aria-label="Copyleft icon" display='inline-block' transform= 'rotateY(180deg)'>&copy;</span><span><a href="https://github.com/OsakaLOOP" target="_blank">@OsakaLOOP</a>Lisenced under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC-BY-SA 4.0</a></span></div>
+                <div style="display: flex; align-items: center; font-size: 1rem; color: #888; font-family: 'Consolas', 'Monaco', monospace; letter-spacing: -0.02em;">
+                    <span style="display: inline-block; transform: scaleX(-1); margin-right: 5px; font-size: 1.1em;" aria-label="Copyleft icon">&copy;</span>
+                    <span>
+                        <a href="https://github.com/OsakaLOOP" target="_blank" style="color: inherit; text-decoration: none; border-bottom: 1px solid #eee;">@OsakaLOOP</a>
+                        <span style="margin: 0 8px; opacity: 0.4;">|</span>
+                        Licensed under 
+                        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" style="color: #630560; text-decoration: none; font-weight: 600;">GPL v3.0</a>
+                        <span style="margin: 0 8px; opacity: 0.4;">|</span>
+                        数据源: <a href="https://jw.nju.edu.cn" target="_blank" style="color: #630560; text-decoration: none; font-weight: 600;">南大教服平台 - 全校课程表</a>
+                    </span>
+                </div>
             </div>
 
             <!-- View 1: Search -->
