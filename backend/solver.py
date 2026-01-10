@@ -8,7 +8,7 @@ class ScheduleSolver:
         A "definite conflict" between Group A and Group B exists if
         EVERY active candidate in Group A conflicts with EVERY active candidate in Group B.
 
-        Returns: List of tuples (group_index_1, group_index_2) representing conflicting pairs.
+        Returns: List of tuples (group_index_1, group_index_2, reason) representing conflicting pairs.
         """
         conflicts = []
         n = len(groups)
