@@ -420,6 +420,9 @@ createApp({
 
         
             try {
+                // Initialize client (verify session) - triggers toasts
+                window.pywebview.api.init_client();
+
                 const data = await window.pywebview.api.load_session('last_session');
                 if (data) {
                         if (data.groups) groups.value = data.groups;
