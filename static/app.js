@@ -55,14 +55,22 @@ createApp({
 
         // --- Methods ---
 
-        const showToast = (msg) => {
+        const showToast = (msg, type='info') => {
             const el = document.querySelector('.toast');
             if (el) {
                 el.innerText = msg;
+                // Reset classes
+                el.className = 'toast';
+                if (type === 'error') el.classList.add('error');
+                if (type === 'success') el.classList.add('success');
+
                 el.style.display = 'block';
                 setTimeout(() => el.style.display = 'none', 3000);
             }
         };
+
+        // Expose to window for backend calls
+        window.showToast = showToast;
 
         const fetchCourses = async (params) => {
             if (window.pywebview) {
@@ -88,7 +96,7 @@ createApp({
                 hasSearched.value = true;
                 filterText.value = ''; // Reset filter
             } catch (e) {
-                showToast("搜索失败: " + e);
+                showToast("搜索失败: " + e, 'error');
             } finally {
                 loading.value = false;
             }
@@ -128,7 +136,7 @@ createApp({
         };
 
         const startBatchImport = async () => {
-            if (!importText.value) return showToast("请粘贴内容");
+            if (!importText.value) return showToast("请粘贴内容", 'error');
             isImporting.value = true;
             importStatus.value = "正在解析...";
 
@@ -156,6 +164,7 @@ createApp({
 
             if (validCodes.length === 0) {
                 importStatus.value = "未找到有效的课程编号";
+                showToast("未找到有效的课程编号", 'error');
                 isImporting.value = false;
                 return;
             }
@@ -197,7 +206,7 @@ createApp({
                 }
             }
 
-            showToast(`导入完成: 成功 ${successCount} 个, 未找到 ${failCount} 个`);
+            showToast(`导入完成: 成功 ${successCount} 个, 未找到 ${failCount} 个`, successCount > 0 ? 'success' : 'error');
             isImporting.value = false;
             showImportModal.value = false;
             currentView.value = 'planning'; // Switch to view
@@ -205,7 +214,7 @@ createApp({
 
         const createGroup = () => {
             const selectedInSearch = searchResults.value.filter(c => c.checked);
-            if (selectedInSearch.length === 0) return showToast("未选择任何课程");
+            if (selectedInSearch.length === 0) return showToast("未选择任何课程", 'error');
 
             // Copy all search results, map checked to selected
             const candidates = searchResults.value.map(c => ({
@@ -221,7 +230,7 @@ createApp({
             // Uncheck after adding
             searchResults.value.forEach(c => c.checked = false);
 
-            showToast("已添加新课程组");
+            showToast("已添加新课程组", 'success');
             // Stay on search view
         };
 
@@ -236,18 +245,19 @@ createApp({
         const removeGroup = (idx) => groups.value.splice(idx, 1);
 
         const generateSchedules = async () => {
-            if (groups.value.length === 0) return showToast("没有课程组");
+            if (groups.value.length === 0) return showToast("没有课程组", 'error');
             loading.value = true;
             try {
                 if (window.pywebview) {
                     const cleanGroups = JSON.parse(JSON.stringify(groups.value));
                     const res = await window.pywebview.api.generate_schedules(cleanGroups, preferences);
                     if (res.error) {
-                        showToast("错误: " + res.error);
+                        showToast("错误: " + res.error, 'error');
                     } else {
                         schedules.value = res.schedules;
                         currentView.value = 'results';
                         currentScheduleIdx.value = 0;
+                        showToast(`成功生成 ${res.schedules.length} 个方案`, 'success');
                     }
                 } else {
                     // Mock
@@ -267,7 +277,7 @@ createApp({
                     currentView.value = 'results';
                 }
             } catch (e) {
-                showToast("生成失败: " + e);
+                showToast("生成失败: " + e, 'error');
             } finally {
                 loading.value = false;
             }
@@ -364,7 +374,14 @@ createApp({
         const saveSession = async () => {
             if (window.pywebview) {
                 await window.pywebview.api.save_session(JSON.stringify(groups.value), JSON.stringify(preferences));
-                showToast("保存成功");
+                // Toast is handled by backend now for success, but let's keep one here or rely on backend return?
+                // The original code printed "Saved" in backend and showed toast in frontend.
+                // The new plan is backend uses send_toast.
+                // I will remove this explicit showToast here if backend sends it,
+                // OR I can keep it for immediate feedback.
+                // Plan said "Update Api.save_session to call send_toast".
+                // So I should probably rely on backend or just keep it consistent.
+                // Let's keep it here for responsiveness, backend can toast "Saved to file..." specific path.
             }
         };
 
