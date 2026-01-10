@@ -128,8 +128,13 @@
                     </div>
 
                     <div class="results-list" v-else>
-                        <label v-for="(course, idx) in filteredSearchResults" :key="idx" class="result-item">
-                            <input type="checkbox" v-model="course.checked">
+                        <label v-for="(course, idx) in filteredSearchResults"
+                               :key="idx"
+                               class="result-item"
+                               :style="(course.location_text || '').includes('自由时间') ? { opacity: 0.5, cursor: 'not-allowed' } : {}">
+                            <input type="checkbox"
+                                   v-model="course.checked"
+                                   :disabled="(course.location_text || '').includes('自由时间')">
                             <div>
                                 <strong>{{ course.name }}</strong> ({{ course.code }}) <br>
                                 <small>老师: {{ course.teacher }} | 地点: {{ course.location_text }}</small>
