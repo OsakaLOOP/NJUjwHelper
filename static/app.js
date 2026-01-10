@@ -223,11 +223,6 @@ createApp({
 
         const getActiveCount = (group) => group.candidates.filter(c => c.selected).length;
 
-        const toggleCandidate = (group, idx) => {
-           const c = group.candidates[idx];
-           if (c) c.selected = !c.selected;
-        };
-
         const removeGroup = (idx) => groups.value.splice(idx, 1);
 
         const generateSchedules = async () => {
@@ -381,7 +376,7 @@ createApp({
             currentView, loading, searchParams, searchResults,
             groups, preferences, schedules, currentScheduleIdx, currentWeek,
             filterText, hasSearched, filteredSearchResults,
-            doSearch, createGroup, getGroupName, getActiveCount, toggleCandidate, removeGroup,
+            doSearch, createGroup, getGroupName, getActiveCount, removeGroup,
             generateSchedules, getCell, downloadImage, saveSession, newSession, toastRef,
             toggleSelectAll, toggleAllDays, invertDays,
             showImportModal, importText, isImporting, importStatus, importParams,
