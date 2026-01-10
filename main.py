@@ -7,26 +7,29 @@ from backend.session_manager import SessionManager
 from backend.solver import ScheduleSolver
 from backend.ranker import ScheduleRanker
 
+def send_toast_global(msg, type='info'):
+    """Standalone callback for backend components to send toasts"""
+    try:
+        if len(webview.windows) > 0:
+            window = webview.windows[0]
+            # Use json.dumps to safely serialize the message (handles quotes, newlines, etc.)
+            import json
+            safe_msg = json.dumps(msg)
+            safe_type = json.dumps(type)
+            # safe_msg already includes quotes, e.g. "Hello"
+            window.evaluate_js(f"showToast({safe_msg}, {safe_type})")
+    except Exception as e:
+        print(f"[Api] Failed to send toast: {e}")
+
 class Api:
     def __init__(self):
-        self.window = None # Will be set after window creation
-        # Pass send_toast as callback, but wait until window is ready
-        # We need a lambda that checks if window exists
-        self.client = NJUCourseClient(toast_callback=self.send_toast_safe)
+        # Pass standalone function to break circular reference Api -> Client -> Api.method
+        self.client = NJUCourseClient(toast_callback=send_toast_global)
         self.session_manager = SessionManager()
 
     def send_toast_safe(self, msg, type='info'):
         """Callback for backend components to send toasts"""
-        if self.window:
-            # evaluate_js must be thread-safe. webview usually handles this,
-            # but sometimes calls from other threads might need dispatch.
-            # In pywebview, evaluate_js is thread-safe.
-            try:
-                # Escape quotes in msg
-                safe_msg = msg.replace("'", "\\'").replace('"', '\\"')
-                self.window.evaluate_js(f"showToast('{safe_msg}', '{type}')")
-            except Exception as e:
-                print(f"[Api] Failed to send toast: {e}")
+        send_toast_global(msg, type)
 
     def search(self, params):
         """
@@ -231,5 +234,4 @@ if __name__ == "__main__":
         js_api=api,
         width=1200, height=800
     )
-    api.window = window # Assign window to api for callbacks
-    webview.start(debug=True)
+    webview.start(debug=False)
