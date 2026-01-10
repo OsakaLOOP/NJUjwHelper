@@ -201,4 +201,4 @@ if __name__ == "__main__":
         width=1200, height=800
     )
     api.window = window # Assign window to api for callbacks
-    webview.start(debug=False)
+    webview.start(debug=True)
