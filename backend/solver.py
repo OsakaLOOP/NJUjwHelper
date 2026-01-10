@@ -52,13 +52,18 @@ class ScheduleSolver:
         return conflicts
 
     @staticmethod
+    def _parse_bitmap(bitmap_list):
+        """Helper to convert list of potential strings to integers"""
+        return [int(x) if isinstance(x, str) else x for x in bitmap_list]
+
+    @staticmethod
     def courses_conflict(course_a, course_b):
         """
         Checks if two courses conflict in time.
         Uses bitwise AND on schedule bitmaps.
         """
-        bmp_a = course_a.get('schedule_bitmaps', [])
-        bmp_b = course_b.get('schedule_bitmaps', [])
+        bmp_a = ScheduleSolver._parse_bitmap(course_a.get('schedule_bitmaps', []))
+        bmp_b = ScheduleSolver._parse_bitmap(course_b.get('schedule_bitmaps', []))
 
         length = min(len(bmp_a), len(bmp_b))
 
@@ -73,8 +78,8 @@ class ScheduleSolver:
         Checks if two courses conflict and returns details.
         Returns: (bool, str_reason)
         """
-        bmp_a = course_a.get('schedule_bitmaps', [])
-        bmp_b = course_b.get('schedule_bitmaps', [])
+        bmp_a = ScheduleSolver._parse_bitmap(course_a.get('schedule_bitmaps', []))
+        bmp_b = ScheduleSolver._parse_bitmap(course_b.get('schedule_bitmaps', []))
         length = min(len(bmp_a), len(bmp_b))
 
         for w in range(1, length):
@@ -145,7 +150,25 @@ class ScheduleSolver:
             # Cluster by unique bitmap content
             clusters = {}
             for c in active:
-                bm_tuple = tuple(c.get('schedule_bitmaps', []))
+                # Ensure bitmaps are integers for the solver
+                # Use in-place update or copy?
+                # Since 'active' is from 'groups' (which is transient input here),
+                # modifying it is generally safe if we don't return it directly to frontend without care.
+                # But wait, frontend gets these objects back.
+                # If we convert to int here, frontend receives int. Overflow again in JS?
+                # YES.
+                # So we must NOT mutate the original object permanently if it goes back to frontend.
+                # However, the result of generate_schedules is a NEW list of objects.
+                # But 'active' references the input objects.
+
+                # We need internal integer bitmaps for solving, but keep original for result?
+                # Actually, we can just use a separate key or parse on the fly.
+                # But for clustering we need a tuple key.
+
+                raw_bm = c.get('schedule_bitmaps', [])
+                int_bm = ScheduleSolver._parse_bitmap(raw_bm)
+                bm_tuple = tuple(int_bm)
+
                 if bm_tuple not in clusters:
                     clusters[bm_tuple] = []
                 clusters[bm_tuple].append(c)
@@ -193,7 +216,20 @@ class ScheduleSolver:
         def backtrack(group_idx, current_schedule_meta):
             if group_idx == len(meta_groups):
                 # Found a valid schedule
-                final_schedule = [m['representative'] for m in current_schedule_meta]
+                # Reconstruct final schedule but include alternatives info
+                final_schedule = []
+                for m in current_schedule_meta:
+                    # Create a shallow copy of the representative so we can attach alternatives
+                    # without mutating the original shared object
+                    rep = m['representative'].copy()
+
+                    # Inject alternatives.
+                    # We pass the list of alternatives (including the rep itself is fine)
+                    # Use a simplified list to avoid circular refs or massive dumps if needed,
+                    # but for now full objects are fine.
+                    rep['alternatives'] = m['alternatives']
+                    final_schedule.append(rep)
+
                 score = ScheduleRanker.score_schedule(final_schedule, preferences)
 
                 entry = (score, next(counter), final_schedule)
