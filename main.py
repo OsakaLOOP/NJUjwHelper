@@ -24,8 +24,16 @@ def send_toast_global(msg, type='info'):
 class Api:
     def __init__(self):
         # Pass standalone function to break circular reference Api -> Client -> Api.method
-        self.client = NJUCourseClient(toast_callback=send_toast_global)
+        # Use lazy_init=True so we don't block startup or try to toast before window exists
+        self.client = NJUCourseClient(toast_callback=send_toast_global, lazy_init=True)
         self.session_manager = SessionManager()
+
+    def init_client(self):
+        """Called from frontend on mount to verify session"""
+        try:
+            self.client.ensure_active_session()
+        except Exception as e:
+            send_toast_global(f"初始化失败: {e}", "error")
 
     def send_toast_safe(self, msg, type='info'):
         """Callback for backend components to send toasts"""

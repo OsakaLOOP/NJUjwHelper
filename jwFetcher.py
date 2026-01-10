@@ -222,23 +222,28 @@ class LoginInterceptor:
         return self._cookies
 
 class NJUCourseClient:
-    def __init__(self, cookie_str=None, toast_callback=None):
+    def __init__(self, cookie_str=None, toast_callback=None, lazy_init=False):
         self.toast_callback = toast_callback
-        if not cookie_str:
-             interceptor = LoginInterceptor(toast_callback=toast_callback)
-             cookie_str = interceptor.get_cookie()
-             if not cookie_str:
-                 cookie_str = interceptor.force_login()
-
+        self.interceptor = LoginInterceptor(toast_callback=toast_callback)
         self.headers = {
             "Host": "ehallapp.nju.edu.cn",
             "Origin": "https://ehallapp.nju.edu.cn",
             "Referer": "https://ehallapp.nju.edu.cn/jwapp/sys/kcbcx/*default/index.do",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "Cookie": cookie_str,
             "X-Requested-With": "XMLHttpRequest"
         }
+
+        if cookie_str:
+            self.headers["Cookie"] = cookie_str
+        elif not lazy_init:
+            self.ensure_active_session()
+
+    def ensure_active_session(self):
+        cookie_str = self.interceptor.get_cookie()
+        if not cookie_str:
+            cookie_str = self.interceptor.force_login()
+        self.headers["Cookie"] = cookie_str
 
     def _get_campus_display(self, code):
         """辅助：补全后端强制要求的 value_display"""
@@ -330,10 +335,29 @@ class NJUCourseClient:
                 "pageNumber": str(page)
             }
             
+            # Retry loop for session expiration
+            res_json = None
+            max_retries = 1
+            for attempt in range(max_retries + 1):
+                try:
+                    resp = requests.post(TARGET_URL, headers=self.headers, data=form_data, timeout=10)
+                    res_json = resp.json()
+                    break # Success
+                except (json.JSONDecodeError, requests.RequestException) as e:
+                    if attempt < max_retries:
+                         print(f"[Warn] Request failed (Attempt {attempt+1}): {e}")
+                         self._toast("会话可能已过期，正在尝试恢复...", "error")
+                         self.ensure_active_session()
+                         # Continue to next attempt
+                    else:
+                         print(f"[Error] Request failed after retries: {e}")
+                         self._toast(f"查询失败 (网络或会话错误): {e}", "error")
+                         return [] # Stop
+
+            if not res_json:
+                break
+
             try:
-                resp = requests.post(TARGET_URL, headers=self.headers, data=form_data, timeout=10)
-                res_json = resp.json()
-                
                 block = res_json.get("datas", {}).get("qxfbkccx", {})
                 rows = block.get("rows", [])
                 total_size = block.get("totalSize", 0)
