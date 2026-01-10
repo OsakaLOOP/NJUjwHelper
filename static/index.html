@@ -237,7 +237,7 @@
         <div v-if="showImportModal" style="position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000;">
             <div style="background: white; padding: 20px; border-radius: 8px; width: 600px; max-width: 90%; display: flex; flex-direction: column; gap: 10px;">
                 <h3>批量导入课程</h3>
-                <p style="font-size: 0.9em; color: #666;">请粘贴来自"学期培养方案"的表格内容 (包含课程号、课程名等)</p>
+                <p style="font-size: 0.9em; color: #666;">请粘贴来自<a href="https://ehallapp.nju.edu.cn/jwapp/sys/qxfacx/*default/index.do" target="_blank">"学期培养方案"</a>的表格内容 (包含课程号、课程名等)</p>
                 <textarea v-model="importText" rows="10" placeholder="粘贴内容到此处..." style="width: 100%; box-sizing: border-box;"></textarea>
 
                 <div style="display: flex; gap: 10px;">

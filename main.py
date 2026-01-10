@@ -76,6 +76,16 @@ class Api:
         except Exception as e:
             print(f"[Api] Save Error: {e}")
             return False
+        
+    def load_session(self, filename="last_session"):
+        try:
+            data = self.session_manager.load_session(filename)
+            if data:
+                print(f"[Api] Loaded session with {len(data.get('groups', []))} groups")
+            return data
+        except Exception as e:
+            print(f"[Api] Load Error: {e}")
+            return None
 
 if __name__ == "__main__":
     api = Api()

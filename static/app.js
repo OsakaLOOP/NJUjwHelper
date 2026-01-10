@@ -213,15 +213,6 @@ createApp({
         const getActiveCount = (group) => group.candidates.filter(c => c.selected).length;
 
         const toggleCandidate = (group, idx) => {
-           // No-op here if using v-model, but let's keep it or remove it.
-           // Since we switch to v-model in the template, this function might become obsolete
-           // OR we can keep it if we want to programmatically toggle.
-           // But the previous implementation used indices.
-           // The template currently calls it. I will update the template to use v-model.
-           // So I can remove this function or just leave a placeholder.
-           // Actually, let's just make it toggle the boolean for the candidate at that index if needed,
-           // but v-model is cleaner. I'll remove it from the return object if I don't use it.
-           // But to be safe, I'll update it to toggle boolean.
            const c = group.candidates[idx];
            if (c) c.selected = !c.selected;
         };
@@ -304,7 +295,7 @@ createApp({
         const init = async () => {
             if (window.pywebview) {
                 try {
-                    const data = await window.pywebview.api.load_session('last_session');
+                    const data = await window.pywebview.api.load_session();
                     if (data) {
                         if (data.groups) groups.value = data.groups;
                         if (data.preferences) Object.assign(preferences, data.preferences);
