@@ -301,7 +301,12 @@ createApp({
             }
         };
 
+        let isInitialized = false;
+
         const init = async () => {
+            if (isInitialized) return;
+            isInitialized = true;
+
             if (window.pywebview) {
                 try {
                     const data = await window.pywebview.api.load_session('last_session');
@@ -322,8 +327,11 @@ createApp({
         };
 
         onMounted(() => {
-            window.addEventListener('pywebviewready', init);
-            setTimeout(init, 500); // Fallback
+            if (window.pywebview) {
+                init();
+            } else {
+                window.addEventListener('pywebviewready', init);
+            }
         });
 
         return {
