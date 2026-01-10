@@ -299,7 +299,21 @@ createApp({
                         }
                     } else {
                          // Fallback logic if sessions missing
-                         loc = (c.location_text || "").split(' ')[0];
+                         // Remove common time patterns: "周x 1-2节 1-16周"
+                         // Also handle potential whitespace
+                         let text = c.location_text || "";
+                         // Regex to match "周[一...日] x-x节 x-x周" with optional (单)/(双)
+                         // Be reasonably aggressive but safe
+                         text = text.replace(/周[一二三四五六日].+?周(\((单|双)\))?/g, '').trim();
+                         // Also try to remove just "周x" if it remains at start
+                         text = text.replace(/^周[一二三四五六日]\s+/, '').trim();
+
+                         // If text is now empty or just whitespace/commas, revert or show unknown
+                         if (!text || text === ',') {
+                             loc = (c.location_text || "").split(' ').pop(); // Try taking the last part as a guess
+                         } else {
+                             loc = text;
+                         }
                     }
 
                     return {
