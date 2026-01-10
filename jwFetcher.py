@@ -460,6 +460,6 @@ if __name__ == "__main__":
         print(f"    Sessions: {course['sessions']}")
     
     # 5. 保存
-    with open("nju_courses_final.json", "w", encoding="utf-8") as f:
+    with open(f"nju_courses_{in_camp}.json", "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
     print("\n完整数据已保存至 'nju_courses_final.json'")
