@@ -59,17 +59,92 @@ class Api:
         raw_schedules = ScheduleSolver.generate_schedules(groups, preferences=preferences)
         print(f"[Api] Found {len(raw_schedules)} valid schedules")
 
-        # 3. Rank
+        # 3. Rank and Enrich
         ranker = ScheduleRanker()
         ranked = []
         for s in raw_schedules:
-            score = ranker.score_schedule(s, preferences)
-            ranked.append({'courses': s, 'score': score})
+            eval_result = ranker.evaluate_schedule(s, preferences)
+            score = eval_result['score']
+            details = eval_result['details']
+
+            # Calculate stats
+            total_credits = 0.0
+            total_hours = 0
+
+            # Find week span
+            min_week = 999
+            max_week = -1
+            has_classes = False
+
+            for course in s:
+                total_credits += course.get('credit', 0)
+
+                # Use official hours if available, else calculate
+                if course.get('hours', 0) > 0:
+                    total_hours += course.get('hours')
+                else:
+                    # Calculate hours from sessions fallback
+                    for sess in course.get('sessions', []):
+                        p_len = sess['end'] - sess['start'] + 1
+                        w_len = len(sess['weeks'])
+                        total_hours += (p_len * w_len)
+
+                # Update week span (always needed)
+                for sess in course.get('sessions', []):
+                    if sess['weeks']:
+                        has_classes = True
+                        min_week = min(min_week, min(sess['weeks']))
+                        max_week = max(max_week, max(sess['weeks']))
+
+            avg_weekly = 0.0
+            if has_classes and max_week >= min_week:
+                span = max_week - min_week + 1
+                if span > 0:
+                    avg_weekly = total_hours / span
+
+            ranked.append({
+                'courses': s,
+                'score': score,
+                'score_details': details,
+                'stats': {
+                    'total_credits': round(total_credits, 1),
+                    'total_hours': total_hours,
+                    'avg_weekly_hours': round(avg_weekly, 1),
+                    'week_span': f"{min_week}-{max_week}" if has_classes else "N/A"
+                }
+            })
 
         # Sort desc
         ranked.sort(key=lambda x: x['score'], reverse=True)
 
         return {'schedules': ranked}
+
+    def save_image_dialog(self, base64_data):
+        import base64
+        try:
+            active_window = webview.windows[0]
+            file_path = active_window.create_file_dialog(
+                webview.SAVE_DIALOG,
+                directory='',
+                save_filename='schedule.png',
+                file_types=('PNG Image (*.png)', 'All files (*.*)')
+            )
+
+            if file_path:
+                if isinstance(file_path, (list, tuple)):
+                    file_path = file_path[0]
+
+                # Remove header if present
+                if ',' in base64_data:
+                    base64_data = base64_data.split(',')[1]
+
+                with open(file_path, "wb") as f:
+                    f.write(base64.b64decode(base64_data))
+                return True
+            return False
+        except Exception as e:
+            print(f"[Api] Save Image Error: {e}")
+            return False
 
     def save_session(self, groups_json, prefs_json):
         try:
