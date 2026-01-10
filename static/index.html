@@ -58,7 +58,7 @@
             <h1>
                 🐋南哪选课助手
                 <span v-if="groups.length > 0" style="font-size: 0.8em; margin-left: 10px; font-weight: normal;">当前组数: {{ groups.length }}</span>
-                <span style="font-size: 0.7rem; font-weight: normal; margin-left: 15px; opacity: 0.8;">本app所有内容在本地处理,仅获取必要的cookie,不存储用户密码.所有内容只是算法生成,不作为完全参考.</span>
+                <span style="font-size: 0.7rem; font-weight: normal; margin-left: 15px; opacity: 0.8;">本app所有内容在本地处理, 仅获取必要的cookie, 不存储用户密码. 所有内容只是算法生成, 不作为完全参考. 数据源: 南大教服平台 - 全校课程表.</span>
             </h1>
             <div>
                 <button @click="saveSession" class="secondary" style="margin-right: 10px;">保存进度</button>
@@ -263,7 +263,7 @@
                                 <strong>评分详情:</strong>
                                 基准分: 100
                                 <span v-for="(val, key) in schedules[currentScheduleIdx].score_details" :key="key" :style="{color: val < 0 ? 'red' : 'green', marginLeft: '10px'}">
-                                    {{ key }}: {{ val > 0 ? '+' : ''}}{{ val }}
+                                    {{ key }}: {{ val >= 0 ? '+' : ''}}{{ val }}
                                 </span>
                                 <span style="margin-left: 10px; font-weight: bold;">= {{ parseInt(schedules[currentScheduleIdx].score) }}</span>
                             </div>
