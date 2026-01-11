@@ -360,7 +360,7 @@ class ScheduleSolver {
 
                 if (!isValid) continue;
                 //forward check
-                let futureIsDead = false;
+                /*let futureIsDead = false;
 
                 for (let nextG = groupIdx + 1; nextG < metaGroups.length; nextG++) {
                     let nextCandidate = false;
@@ -387,7 +387,7 @@ class ScheduleSolver {
                     }
                 }
 
-                if (futureIsDead) continue;
+                if (futureIsDead) continue;*/
 
                 currentScheduleMeta.push(meta);
 

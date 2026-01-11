@@ -148,6 +148,7 @@ createApp({
 
             const lines = importText.value.split('\n');
             const validCodes = [];
+            const names = [];
 
             // Pattern: 6+ digits, optional suffix letter
             const codePattern = /^\d{6,}[A-Za-z]?$/;
@@ -157,15 +158,40 @@ createApp({
                 if (!line) continue;
                 // Split by spaces/tabs
                 const parts = line.split(/\s+/);
-
-                let candidate = parts[0];
+                let name = '';
+                if (parts.length === 0) continue;
+                else if (parts.length === 1) {
+                    const candidate = parts[0];
+                    if (codePattern.test(candidate)) {
+                        validCodes.push(candidate);
+                    } else {
+                        names.push(candidate);
+                    }
+                }
+                else if (parts.length === 2) {
+                    if (codePattern.test(parts[0])) {
+                        validCodes.push(parts[0]);
+                        names.push(parts[1]);
+                    } else if (codePattern.test(parts[1])) {
+                        validCodes.push(parts[1]);
+                        names.push(parts[0]);
+                    } else {
+                        continue;
+                    }
+                }
+                else{
                 if (parts[0] === '查看' && parts.length > 1) {
                     candidate = parts[1];
+                    name = parts[2];
+                } else {
+                    candidate = parts[0];
+                    name = parts[1];
                 }
-
                 if (codePattern.test(candidate)) {
                     validCodes.push(candidate);
                 }
+                names.push(name);
+            }
             }
 
             if (validCodes.length === 0) {
