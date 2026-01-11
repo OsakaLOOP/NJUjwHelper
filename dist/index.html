@@ -284,6 +284,10 @@
                                 <span>周平均学时: {{ schedules[currentScheduleIdx].stats?.avg_weekly_hours }}</span>
                                 <span>活跃周次: {{ schedules[currentScheduleIdx].stats?.week_span }}</span>
                             </div>
+                            <div v-if="schedules[currentScheduleIdx].missing_course_names && schedules[currentScheduleIdx].missing_course_names.length > 0"
+                                 style="margin-bottom: 5px; color: #b71c1c; font-weight: bold;">
+                                ⚠️ 未排课程 (冲突): {{ schedules[currentScheduleIdx].missing_course_names.join(', ') }}
+                            </div>
                             <div style="font-size: 0.85rem; color: #555;">
                                 <strong>评分详情:</strong>
                                 基准分: 100

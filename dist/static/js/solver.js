@@ -164,20 +164,6 @@ class ScheduleSolver {
         });
     }
 
-    static coursesConflict(courseA, courseB) {
-        const bmpA = ScheduleSolver.parseBitmap(courseA.schedule_bitmaps);
-        const bmpB = ScheduleSolver.parseBitmap(courseB.schedule_bitmaps);
-        const length = Math.min(bmpA.length, bmpB.length);
-
-        for (let w = 1; w < length; w++) {
-            if ((bmpA[w] & bmpB[w]) !== 0n) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // Check conflicts but return details (simplified for JS port, mostly for frontend use if needed)
     static coursesConflictWithDetails(courseA, courseB) {
         const bmpA = ScheduleSolver.parseBitmap(courseA.schedule_bitmaps);
         const bmpB = ScheduleSolver.parseBitmap(courseB.schedule_bitmaps);
@@ -231,53 +217,63 @@ class ScheduleSolver {
                 }
 
                 if (allConflict) {
-                    conflicts.push({ group1: i, group2: j, reason: firstReason || "Unknown" });
+                    const nameA = activeA[0].name || `Group ${i}`;
+                    const nameB = activeB[0].name || `Group ${j}`;
+                    return { error: `检测到绝对冲突: [${nameA}] 与 [${nameB}] 无法同时选择 (冲突原因: ${firstReason})` };
                 }
             }
         }
-        return conflicts;
+        return null;
     }
 
     static generateSchedules(groups, preferences) {
         const maxResults = 20;
         preferences = preferences || {};
 
-        // 0. Preprocess: Merge Groups
+        // 0. Preprocess: Filter Empty Groups & Merge
         const mergedGroupsMap = new Map();
 
-        for (const g of groups) {
-            const candidates = g.candidates || [];
-            if (candidates.length === 0) continue;
+        // Use filtered groups for logic
+        const nonEmptyGroups = groups.filter(g => g.candidates && g.candidates.some(c => c.selected));
 
-            let courseName = candidates[0].name;
+        if (nonEmptyGroups.length === 0) {
+            return { schedules: [], total_found: 0 };
+        }
+
+        // 1. Check for Absolute Conflicts First
+        const conflictErr = ScheduleSolver.checkConflicts(nonEmptyGroups);
+        if (conflictErr) {
+            return { schedules: [], total_found: 0, error: conflictErr.error };
+        }
+
+        // 2. Prepare Meta-Groups
+        for (const g of nonEmptyGroups) {
+            const active = g.candidates.filter(c => c.selected);
+            let courseName = active[0].name;
             if (!courseName) courseName = `__ID_${g.id}__`;
 
             if (!mergedGroupsMap.has(courseName)) {
                 mergedGroupsMap.set(courseName, {
                     id: g.id,
-                    candidates: candidates.filter(c => c.selected)
+                    name: courseName,
+                    candidates: active
                 });
             } else {
                 const existing = mergedGroupsMap.get(courseName);
-                const newActive = candidates.filter(c => c.selected);
-                existing.candidates = existing.candidates.concat(newActive);
+                existing.candidates = existing.candidates.concat(active);
             }
         }
 
-        const processedGroups = Array.from(mergedGroupsMap.values());
-
-        // 1. Meta-Candidates
         const metaGroups = [];
-        for (const g of processedGroups) {
+        for (const g of mergedGroupsMap.values()) {
             const active = g.candidates;
-            if (active.length === 0) return { schedules: [], total_found: 0, error: "One of the groups has no selected candidates." };
 
+            // Cluster by time slots (bitmaps)
             const clusters = new Map();
             for (const c of active) {
                 const rawBm = c.schedule_bitmaps || [];
                 const intBm = ScheduleSolver.parseBitmap(rawBm);
-                // Create key from bitmap content
-                const key = intBm.join(','); // Array to string key
+                const key = intBm.join(',');
 
                 if (!clusters.has(key)) {
                     clusters.set(key, { bitmaps: intBm, list: [] });
@@ -294,58 +290,131 @@ class ScheduleSolver {
                 });
             }
 
-            // Sort by density (fewest bits set)
+            // Sort by density (heuristic: fewer classes first might leave more room? or opposite?)
+            // Just stick to density sort
             metaCandidates.sort((a, b) => {
                 const countA = a.bitmaps.reduce((acc, val) => acc + ScheduleRanker.countSetBits(val), 0);
                 const countB = b.bitmaps.reduce((acc, val) => acc + ScheduleRanker.countSetBits(val), 0);
                 return countA - countB;
             });
 
-            metaGroups.push(metaCandidates);
+            metaGroups.push({
+                name: g.name,
+                candidates: metaCandidates
+            });
         }
 
-        // Sort groups by size (MRV)
-        metaGroups.sort((a, b) => a.length - b.length);
+        // Sort groups by size (MRV - Minimum Remaining Values) to fail fast
+        metaGroups.sort((a, b) => a.candidates.length - b.candidates.length);
 
-        // 2. DFS
-        const topNHeap = []; // Array of {score, schedule}
+        const totalGroupsCount = metaGroups.length;
+
+        // 3. Max-Subset DFS
+        const topNHeap = [];
+        let maxCoursesFound = 0;
         let totalFound = 0;
         const currentBitmap = Array(30).fill(0n);
 
         function backtrack(groupIdx, currentScheduleMeta) {
-            if (groupIdx === metaGroups.length) {
-                totalFound++;
+            const scheduledCount = currentScheduleMeta.length;
 
-                // Reconstruct
-                const finalSchedule = currentScheduleMeta.map(m => {
-                    const rep = { ...m.representative }; // Shallow copy
-                    rep.alternatives = m.alternatives;
-                    return rep;
-                });
+            // Base Case: All groups processed
+            if (groupIdx === totalGroupsCount) {
+                // We reached a leaf. Update maxCoursesFound
+                if (scheduledCount > maxCoursesFound) {
+                    maxCoursesFound = scheduledCount;
+                    // Clear heap because we found a better size?
+                    // Usually we prefer larger schedules over higher scores of smaller schedules.
+                    // Yes: "must arrange as many courses as possible first"
+                    topNHeap.length = 0;
+                }
 
-                const score = ScheduleRanker.scoreSchedule(finalSchedule, preferences);
-                const entry = { score, schedule: finalSchedule };
+                if (scheduledCount === maxCoursesFound) {
+                    totalFound++;
 
-                if (topNHeap.length < maxResults) {
-                    topNHeap.push(entry);
-                    topNHeap.sort((a, b) => a.score - b.score); // Ascending order (min-heap like)
-                } else if (score > topNHeap[0].score) {
-                    topNHeap[0] = entry;
-                    topNHeap.sort((a, b) => a.score - b.score);
+                    // Reconstruct
+                    const finalSchedule = currentScheduleMeta.map(m => {
+                        const rep = { ...m.representative };
+                        rep.alternatives = m.alternatives;
+                        return rep;
+                    });
+
+                    // Missing Groups
+                    const presentNames = new Set(finalSchedule.map(c => c.name));
+                    const missingNames = [];
+                    for(const mg of metaGroups) {
+                        if (!presentNames.has(mg.name)) {
+                            missingNames.push(mg.name);
+                        }
+                    }
+
+                    const missingCount = missingNames.length;
+
+                    // Score
+                    const evalResult = ScheduleRanker.evaluateSchedule(finalSchedule, preferences);
+                    let score = evalResult.score;
+
+                    // Apply Missing Penalty
+                    const penalty = missingCount * 10.0;
+                    score -= penalty;
+
+                    const entry = {
+                        score,
+                        schedule: finalSchedule,
+                        missingNames,
+                        missingCount,
+                        details: evalResult.details
+                    };
+                    // Add missing penalty to details for display
+                    if (missingCount > 0) {
+                        entry.details['缺课惩罚'] = -penalty;
+                    }
+
+                    if (topNHeap.length < maxResults) {
+                        topNHeap.push(entry);
+                        topNHeap.sort((a, b) => a.score - b.score);
+                    } else if (score > topNHeap[0].score) {
+                        topNHeap[0] = entry;
+                        topNHeap.sort((a, b) => a.score - b.score);
+                    }
                 }
                 return;
             }
 
-            // Pruning (Optional)
-            /*if (topNHeap.length === maxResults) {
-                 const partialSched = currentScheduleMeta.map(m => m.representative);
-                 const partialScore = ScheduleRanker.scoreSchedule(partialSched, preferences);
-                 if (partialScore < topNHeap[0].score - 50) return;
-            }*/
+            // Pruning: Calculate Future Potential
+            // Count how many future groups have AT LEAST ONE candidate compatible with currentBitmap
+            let compatibleFuture = 0;
+            for (let i = groupIdx; i < totalGroupsCount; i++) {
+                const group = metaGroups[i];
+                let canFit = false;
+                for (const cand of group.candidates) {
+                    // Check compatibility
+                    let ok = true;
+                    const limit = Math.min(cand.bitmaps.length, currentBitmap.length);
+                    for (let w = 1; w < limit; w++) {
+                        if ((cand.bitmaps[w] & currentBitmap[w]) !== 0n) {
+                            ok = false;
+                            break;
+                        }
+                    }
+                    if (ok) {
+                        canFit = true;
+                        break;
+                    }
+                }
+                if (canFit) compatibleFuture++;
+            }
 
-            const candidates = metaGroups[groupIdx];
+            if (scheduledCount + compatibleFuture < maxCoursesFound) {
+                // Cannot possibly beat the best found size
+                return;
+            }
 
-            for (const meta of candidates) {
+            // Branch 1: Try to pick a candidate from current group
+            const currentGroup = metaGroups[groupIdx];
+            let pickedSomething = false;
+
+            for (const meta of currentGroup.candidates) {
                 const metaBmp = meta.bitmaps;
 
                 // Check Conflict
@@ -359,57 +428,37 @@ class ScheduleSolver {
                 }
 
                 if (!isValid) continue;
-                //forward check
-                /*let futureIsDead = false;
 
-                for (let nextG = groupIdx + 1; nextG < metaGroups.length; nextG++) {
-                    let nextCandidate = false;
 
-                    for (const nextMeta of metaGroups[nextG]) {
-                        let conflictFound = false;
-                        const limitF = Math.min(nextMeta.bitmaps.length, currentBitmap.length);
-                        // Apply
-                        for (let w = 1; w < limitF; w++) {
-                            if (((currentBitmap[w] | metaBmp[w]) & nextMeta.bitmaps[w]) !== 0n) {
-                                conflictFound = true;
-                                break;
-                            }
-                        }
-
-                        if (!conflictFound) {
-                            nextCandidate = true;
-                            break;
-                        }
-                    }
-                    if (!nextCandidate) {
-                        futureIsDead = true;
-                        break;
-                    }
-                }
-
-                if (futureIsDead) continue;*/
 
                 currentScheduleMeta.push(meta);
+                // Update bitmap
+                for (let w = 1; w < limit; w++) {
+                    currentBitmap[w] |= metaBmp[w];
+                }
 
                 backtrack(groupIdx + 1, currentScheduleMeta);
 
-                // Undo
+                // Backtrack
                 currentScheduleMeta.pop();
                 for (let w = 1; w < limit; w++) {
-                    currentBitmap[w] ^= metaBmp[w]; // XOR to unset
+                    currentBitmap[w] ^= metaBmp[w]; // Unset
                 }
+                pickedSomething = true;
             }
+
+
+            backtrack(groupIdx + 1, currentScheduleMeta);
         }
 
         backtrack(0, []);
 
-        // Sort descending by score for output
+        // Sort descending
         const sortedResults = topNHeap.sort((a, b) => b.score - a.score);
 
-        // Enrich results with stats
+        // Map to final format
         const finalSchedules = sortedResults.map(item => {
             const sched = item.schedule;
-            const evalResult = ScheduleRanker.evaluateSchedule(sched, preferences);
 
             let totalCredits = 0;
             let totalHours = 0;
@@ -423,20 +472,18 @@ class ScheduleSolver {
                  }
             });
 
-            // Calculate span
             const weeks = Array.from(weekSet).sort((a,b)=>a-b);
             let weekSpan = "";
             if (weeks.length > 0) {
-                // simple grouping
-                // ... logic to format 1-16 etc.
-                // Just using start-end for now
                 weekSpan = `${weeks[0]}-${weeks[weeks.length-1]}`;
             }
 
             return {
                 score: item.score,
-                score_details: evalResult.details,
+                score_details: item.details,
                 courses: sched,
+                missing_course_names: item.missingNames,
+                missing_groups: [], // user didn't ask for IDs, just names in UI.
                 stats: {
                     total_credits: totalCredits,
                     total_hours: totalHours,
@@ -453,7 +500,7 @@ class ScheduleSolver {
     }
 }
 
-// Export for module use or browser global
+// Export
 if (typeof window !== 'undefined') {
     window.Solver = ScheduleSolver;
     window.Ranker = ScheduleRanker;
