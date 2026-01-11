@@ -11,7 +11,7 @@
     <style>
         body { font-family: "Microsoft YaHei", sans-serif; margin: 0; padding: 0; background: #f5f5f5; color: #333; }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        header { background: #630560; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 100; }
+        header { background: #630560; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 100; position: relative;}
         h1 { margin: 0; font-size: 1.2rem; display: flex; align-items: baseline; }
         button { background: #39C5BB; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         button:hover { opacity: 0.9; }
@@ -20,8 +20,8 @@
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
 
         /* Navigation */
-        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; justify-content: space-between; width: 90%; z-index: 50;}
-        .nav-tab { padding: 10px 20px; background: #ddd; border-radius: 0 0 8px 8px; transition: background 0.2s, transform 0.1s; cursor: pointer; z-index: 50;}
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; justify-content: space-between; width: 90%; z-index: 50;position: relative;}
+        .nav-tab { padding: 10px 20px; background: #ddd; border-radius: 0 0 8px 8px; transition: background 0.2s, transform 0.1s; cursor: pointer; z-index: 50;position: relative;}
         .nav-tab.active { background: #630560; color: white; }
         .nav-tab:hover:not(.active) {
     background: #e0e0e0;
