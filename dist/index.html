@@ -21,7 +21,7 @@
 
         /* Navigation */
         .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; justify-content: space-between; width: 90%; z-index: 50;}
-        .nav-tab { padding: 10px 20px; background: #ddd; border-radius: 0 0 8px 8px; transition: background 0.2s, transform 0.1s; cursor: pointer; }
+        .nav-tab { padding: 10px 20px; background: #ddd; border-radius: 0 0 8px 8px; transition: background 0.2s, transform 0.1s; cursor: pointer; z-index: 50;}
         .nav-tab.active { background: #630560; color: white; }
         .nav-tab:hover:not(.active) {
     background: #e0e0e0;
@@ -292,7 +292,7 @@
                                 <strong>评分详情:</strong>
                                 基准分: 100
                                 <span v-for="(val, key) in schedules[currentScheduleIdx].score_details" :key="key" :style="{color: val < 0 ? 'red' : 'green', marginLeft: '10px'}">
-                                    {{ key }}: {{ val >= 0 ? '+' : ''}}{{ val }}
+                                    {{ key }}: {{ val >= 0 ? '+' : ''}}{{ val.toFixed(2) }}
                                 </span>
                                 <span style="margin-left: 10px; font-weight: bold;">= {{ parseInt(schedules[currentScheduleIdx].score) }}</span>
                             </div>
@@ -318,7 +318,7 @@
                                             <div style="font-size: 0.8em;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).location }}</div>
                                             <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives && getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives.length > 1"
                                                  style="background: #1976d2; color: white; border-radius: 10px; padding: 0 4px; font-size: 0.7em; display: inline-block; margin-top: 2px;">
-                                                +{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives.length - 1 }}
+                                                可选老师+{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives.length - 1 }}
                                             </div>
                                         </div>
                                     </td>
