@@ -298,9 +298,7 @@ class ScheduleSolver {
             } else {
                 const existing = mergedGroupsMap.get(courseName);
                 existing.candidates = existing.candidates.concat(active);
-                // If any part of the merged group is marked skippable, we might want to respect that?
-                // Or should we enforce that if one part is skippable, the whole thing is?
-                // User sets 'skippable' on the Group. If we merge groups by name, we should probably OR the flag.
+                
                 if (g.is_skippable) existing.is_skippable = true;
             }
         }

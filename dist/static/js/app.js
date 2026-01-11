@@ -258,15 +258,7 @@ createApp({
             move: (e) => {
                 // If we moved before activation, cancel the timer
                 if (!touchState.dragging) {
-                    // Simple threshold check could go here if we wanted to be strict
-                    // But usually the browser takes over scrolling, which cancels the long press implicitly?
-                    // Actually, we should clear timeout on significant move
                      if (longPressTimer) {
-                         // We can't easily detect "significant" without storing start pos.
-                         // But if the user scrolls, we usually want to cancel.
-                         // Let's rely on 'touchcancel' or rely on the fact that if we preventDefault in move, it works.
-                         // If we DON'T preventDefault, scroll happens.
-                         // We'll add logic: if move happens and NOT dragging, clear timer.
                          clearTimeout(longPressTimer);
                          longPressTimer = null;
                      }
