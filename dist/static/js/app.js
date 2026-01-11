@@ -10,6 +10,7 @@ createApp({
         const preferences = reactive({
             avoid_early_morning: false,
             avoid_weekend: false,
+            quality_sleep: false, // Avoid 9-13
             compactness: 'none',
             day_max_limit_enabled: false,
             day_max_limit_value: 0,
@@ -255,7 +256,8 @@ createApp({
                         groups.value.push({
                             id: Date.now() + i, // unique-ish id
                             open: false,
-                            candidates: candidates
+                            candidates: candidates,
+                            is_skippable: false // Default
                         });
                         successCount++;
                     } else {
@@ -291,7 +293,8 @@ createApp({
             groups.value.push({
                 id: Date.now(),
                 open: false,
-                candidates: JSON.parse(JSON.stringify(candidates))
+                candidates: JSON.parse(JSON.stringify(candidates)),
+                is_skippable: false // Default
             });
             // Uncheck after adding
             searchResults.value.forEach(c => c.checked = false);
@@ -377,7 +380,8 @@ createApp({
                         teacher: c.teacher,
                         location: loc,
                         alternatives: c.alternatives,
-                        isCurrent: true
+                        isCurrent: true,
+                        is_skippable: !!c.is_skippable // Pass to view
                     };
                 }
             }
@@ -400,7 +404,8 @@ createApp({
                                 teacher: c.teacher,
                                 location: sess.location,
                                 alternatives: c.alternatives,
-                                isCurrent: false // Gray out
+                                isCurrent: false, // Gray out
+                                is_skippable: !!c.is_skippable
                             };
                         }
                     }
@@ -418,7 +423,8 @@ createApp({
                                     teacher: c.teacher,
                                     location: c.location_text, // Raw text fallback
                                     alternatives: c.alternatives,
-                                    isCurrent: false
+                                    isCurrent: false,
+                                    is_skippable: !!c.is_skippable
                                  };
                              }
                          }
@@ -462,7 +468,15 @@ createApp({
              if (raw) {
                  try {
                      const data = JSON.parse(raw);
-                     if (data.groups) groups.value = data.groups;
+                     if (data.groups) {
+                         groups.value = data.groups;
+                         // Migration: Add is_skippable if missing
+                         groups.value.forEach(g => {
+                             if (g.is_skippable === undefined) {
+                                 g.is_skippable = false;
+                             }
+                         });
+                     }
                      if (data.preferences) Object.assign(preferences, data.preferences);
                      return true;
                  } catch (e) {

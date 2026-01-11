@@ -6,9 +6,14 @@ class ScheduleRanker {
         let totalBonus = 0.0;
 
         // 0. Merge bitmaps into fullBitmap (BigInt array)
+        // Also merge bitmaps for non-skippable courses into scoringBitmap
         const fullBitmap = Array(30).fill(0n);
+        const scoringBitmap = Array(30).fill(0n);
+
         for (const course of schedule) {
             const cb = course.schedule_bitmaps || [];
+            const isSkippable = !!course.is_skippable;
+
             for (let w = 0; w < cb.length; w++) {
                 if (w < fullBitmap.length) {
                     let val = 0n;
@@ -18,16 +23,21 @@ class ScheduleRanker {
                         val = 0n;
                     }
                     fullBitmap[w] |= val;
+                    if (!isSkippable) {
+                        scoringBitmap[w] |= val;
+                    }
                 }
             }
         }
+
+        // Use scoringBitmap for penalties
 
         // 1. Avoid Early Morning
         if (preferences.avoid_early_morning) {
             let penalty = 0;
             // Iterate weeks 1 to 25
             for (let w = 1; w <= 25; w++) {
-                const mask = fullBitmap[w];
+                const mask = scoringBitmap[w];
                 if (mask === 0n) continue;
 
                 let earlyMask = 0n;
@@ -55,7 +65,7 @@ class ScheduleRanker {
             }
 
             for (let w = 1; w <= 25; w++) {
-                if ((fullBitmap[w] & weekendMask) !== 0n) {
+                if ((scoringBitmap[w] & weekendMask) !== 0n) {
                     penalty += 1;
                 }
             }
@@ -68,7 +78,7 @@ class ScheduleRanker {
         if (preferences.compactness === 'high' || preferences.compactness === 'low') {
             let totalGaps = 0;
             for (let w = 1; w <= 25; w++) {
-                const mask = fullBitmap[w];
+                const mask = scoringBitmap[w];
                 if (mask === 0n) continue;
                 for (let d = 0; d < 5; d++) { // Mon-Fri
                     const dayBits = (mask >> BigInt(d * 13)) & 0x1FFFn;
@@ -115,7 +125,7 @@ class ScheduleRanker {
 
             let penalty = 0;
             for (let w = 1; w <= 25; w++) {
-                const mask = fullBitmap[w];
+                const mask = scoringBitmap[w];
                 if (mask === 0n) continue;
                 for (let d = 0; d < 7; d++) {
                     if (!targetDays[d]) continue;
@@ -130,6 +140,32 @@ class ScheduleRanker {
             const pVal = penalty;
             totalPenalty += pVal;
             details['特定日限制'] = -pVal;
+        }
+
+        // 5. Quality Sleep (Avoid 9-13)
+        if (preferences.quality_sleep) {
+            let penalty = 0;
+            for (let w = 1; w <= 25; w++) {
+                const mask = scoringBitmap[w];
+                if (mask === 0n) continue;
+
+                let sleepMask = 0n;
+                for (let d = 0; d < 7; d++) {
+                     // Node 9 to 13
+                     // Nodes are 1-based in my comments, but 0-12 in bits.
+                     // 1=0, 2=1, ..., 9=8, 13=12.
+                     for (let n = 8; n <= 12; n++) {
+                         sleepMask |= (1n << BigInt(d * 13 + n));
+                     }
+                }
+
+                if ((mask & sleepMask) !== 0n) {
+                    penalty += 1;
+                }
+            }
+            const pVal = penalty * 2.0;
+            totalPenalty += pVal;
+            details['优质睡眠'] = -pVal;
         }
 
         return {
@@ -256,11 +292,16 @@ class ScheduleSolver {
                 mergedGroupsMap.set(courseName, {
                     id: g.id,
                     name: courseName,
-                    candidates: active
+                    candidates: active,
+                    is_skippable: !!g.is_skippable
                 });
             } else {
                 const existing = mergedGroupsMap.get(courseName);
                 existing.candidates = existing.candidates.concat(active);
+                // If any part of the merged group is marked skippable, we might want to respect that?
+                // Or should we enforce that if one part is skippable, the whole thing is?
+                // User sets 'skippable' on the Group. If we merge groups by name, we should probably OR the flag.
+                if (g.is_skippable) existing.is_skippable = true;
             }
         }
 
@@ -286,7 +327,8 @@ class ScheduleSolver {
                 metaCandidates.push({
                     representative: val.list[0],
                     bitmaps: val.bitmaps,
-                    alternatives: val.list
+                    alternatives: val.list,
+                    is_skippable: g.is_skippable // Propagate to meta-candidate
                 });
             }
 
@@ -336,6 +378,7 @@ class ScheduleSolver {
                     const finalSchedule = currentScheduleMeta.map(m => {
                         const rep = { ...m.representative };
                         rep.alternatives = m.alternatives;
+                        rep.is_skippable = m.is_skippable;
                         return rep;
                     });
 
@@ -462,13 +505,18 @@ class ScheduleSolver {
 
             let totalCredits = 0;
             let totalHours = 0;
+            let actualTotalHours = 0;
             const weekSet = new Set();
             const countedCourses = new Set(); // Prevent double counting credits/hours for same-named courses
 
             sched.forEach(c => {
                  if (!countedCourses.has(c.name)) {
                      totalCredits += (c.credit || 0);
-                     totalHours += (c.hours || 0);
+                     const h = (c.hours || 0);
+                     totalHours += h;
+                     if (!c.is_skippable) {
+                         actualTotalHours += h;
+                     }
                      countedCourses.add(c.name);
                  }
                  if (c.sessions) {
@@ -491,7 +539,9 @@ class ScheduleSolver {
                 stats: {
                     total_credits: totalCredits,
                     total_hours: totalHours,
+                    actual_total_hours: actualTotalHours,
                     avg_weekly_hours: weeks.length > 0 ? (totalHours / weeks.length).toFixed(1) : 0,
+                    actual_avg_weekly_hours: weeks.length > 0 ? (actualTotalHours / weeks.length).toFixed(1) : 0,
                     week_span: weekSpan
                 }
             };

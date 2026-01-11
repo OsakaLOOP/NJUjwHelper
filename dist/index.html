@@ -47,6 +47,7 @@
         .timetable th { background: #f9f9f9; }
         .cell-active { background-color: #bbdefb; color: #0d47a1; font-size: 0.75rem; border-radius: 2px; height: 100%; width: 100%; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
         .cell-active.gray { background-color: #e0e0e0; color: #757575; opacity: 0.8; }
+        .cell-active.skippable { background-color: #c8e6c9; color: #2e7d32; }
         .cell-conflict { background-color: #ffcdd2; color: #b71c1c; }
 
         /* Toast */
@@ -194,7 +195,13 @@
                             <strong>组 {{ idx + 1 }}:</strong> {{ getGroupName(group) }}
                             <small>({{ getActiveCount(group) }}/{{ group.candidates.length }} 选中)</small>
                         </span>
-                        <button class="danger" @click.stop="removeGroup(idx)" style="padding: 4px 8px; font-size: 0.8rem;">删除</button>
+                        <div style="display: flex; align-items: center; gap: 10px;" @click.stop>
+                            <label style="font-size: 0.85rem; cursor: pointer; display: flex; align-items: center;">
+                                <input type="checkbox" v-model="group.is_skippable" style="margin-right: 4px;">
+                                是否可逃
+                            </label>
+                            <button class="danger" @click="removeGroup(idx)" style="padding: 4px 8px; font-size: 0.8rem;">删除</button>
+                        </div>
                     </div>
                     <div :class="['group-body', group.open ? 'open' : '']">
                         <label v-for="(course, cIdx) in group.candidates" :key="cIdx" class="result-item">
@@ -210,6 +217,7 @@
 
                 <h3>偏好设置</h3>
                 <label><input type="checkbox" v-model="preferences.avoid_early_morning"> 避开早八 (1-2节)</label> <br>
+                <label><input type="checkbox" v-model="preferences.quality_sleep"> 优质睡眠 (9-13节)</label> <br>
                 <label><input type="checkbox" v-model="preferences.avoid_weekend"> 避开周末</label> <br>
                 <div style="margin-top: 10px;">
                     课程分布:
@@ -288,6 +296,7 @@
                                 <span>总学分: {{ schedules[currentScheduleIdx].stats?.total_credits }}</span>
                                 <span>总学时: {{ schedules[currentScheduleIdx].stats?.total_hours }}</span>
                                 <span>周平均学时: {{ schedules[currentScheduleIdx].stats?.avg_weekly_hours }}</span>
+                                <span style="color: #2e7d32;">实际每周学时: {{ schedules[currentScheduleIdx].stats?.actual_avg_weekly_hours }}</span>
                                 <span>活跃周次: {{ schedules[currentScheduleIdx].stats?.week_span }}</span>
                             </div>
                             <div v-if="schedules[currentScheduleIdx].missing_course_names && schedules[currentScheduleIdx].missing_course_names.length > 0"
@@ -316,7 +325,7 @@
                                     <td>{{ node }}</td>
                                     <td v-for="day in 7" :key="day">
                                         <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1)"
-                                             :class="['cell-active', getCell(currentScheduleIdx, currentWeek, day-1, node-1).isCurrent ? '' : 'gray']"
+                                             :class="['cell-active', getCell(currentScheduleIdx, currentWeek, day-1, node-1).isCurrent ? '' : 'gray', getCell(currentScheduleIdx, currentWeek, day-1, node-1).is_skippable ? 'skippable' : '']"
                                              @click="openAlternatives(getCell(currentScheduleIdx, currentWeek, day-1, node-1))"
                                              style="cursor: pointer;">
                                             <div style="font-weight: bold;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).name }}</div>
