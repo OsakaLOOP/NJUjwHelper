@@ -60,6 +60,19 @@
         .alt-card { background: white; padding: 20px; border-radius: 8px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
         .alt-item { padding: 10px; border-bottom: 1px solid #eee; }
         .alt-item:last-child { border-bottom: none; }
+
+        /* Mobile Drag Selection */
+        .drag-selecting { animation: ripple 0.3s ease-out; background-color: rgba(99, 5, 96, 0.1); }
+        @keyframes ripple {
+            0% { transform: scale(0.95); opacity: 0.5; }
+            50% { transform: scale(1.02); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .result-item { user-select: none; -webkit-user-select: none; } /* Disable text selection for drag */
+
+        /* Sticky Headers */
+        header { position: sticky; top: 0; }
+        .nav-tabs { position: sticky; top: 55px; background: #f5f5f5; padding-top: 10px; margin-top: -10px; } /* Adjust top based on header height ~55px */
     </style>
 </head>
 <body>
@@ -165,14 +178,20 @@
                         {{ searchResults.length === 0 ? '未找到符合条件的课程。' : '当前筛选条件下没有课程。' }}
                     </div>
 
-                    <div class="results-list" v-else>
+                    <div class="results-list" v-else
+                         @touchmove="touchManager.move"
+                         @touchend="touchManager.end">
                         <label v-for="(course, idx) in filteredSearchResults"
                                :key="idx"
-                               class="result-item"
+                               :class="['result-item', (touchState.dragging && touchState.listType==='search' && touchState.startIndex===idx) ? 'drag-selecting' : '']"
+                               :data-index="idx"
+                               @click.prevent="handleSearchItemClick(idx, $event)"
+                               @touchstart="touchManager.start($event, 'search', idx)"
                                :style="(course.location_text || '').includes('自由时间') ? { opacity: 0.5, cursor: 'not-allowed' } : {}">
                             <input type="checkbox"
-                                   v-model="course.checked"
-                                   :disabled="(course.location_text || '').includes('自由时间')">
+                                   :checked="course.checked"
+                                   :disabled="(course.location_text || '').includes('自由时间')"
+                                   style="pointer-events: none;">
                             <div>
                                 <strong>{{ course.name }}</strong> ({{ course.code }}) <br>
                                 <small>老师: {{ course.teacher }} | 地点: {{ course.location_text }}</small>
@@ -205,10 +224,17 @@
                             <button class="danger" @click="removeGroup(idx)" style="padding: 4px 8px; font-size: 0.8rem;">删除</button>
                         </div>
                     </div>
-                    <div :class="['group-body', group.open ? 'open' : '']">
-                        <label v-for="(course, cIdx) in group.candidates" :key="cIdx" class="result-item">
+                    <div :class="['group-body', group.open ? 'open' : '']"
+                         @touchmove="touchManager.move"
+                         @touchend="touchManager.end">
+                        <label v-for="(course, cIdx) in group.candidates" :key="cIdx"
+                               :class="['result-item', (touchState.dragging && touchState.listType==='group' && touchState.groupIdx===idx && touchState.startIndex===cIdx) ? 'drag-selecting' : '']"
+                               :data-index="cIdx"
+                               @click.prevent="handleGroupItemClick(idx, cIdx, $event)"
+                               @touchstart="touchManager.start($event, 'group', cIdx, idx)">
                             <input type="checkbox"
-                                   v-model="course.selected">
+                                   :checked="course.selected"
+                                   style="pointer-events: none;">
                             <div>
                                 {{ course.name }} - {{ course.teacher }} <br>
                                 <small>{{ course.location_text }}</small>

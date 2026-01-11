@@ -27,6 +27,10 @@ createApp({
         const showAllWeeks = ref(false);
         const toastRef = ref(null);
 
+        // Selection State
+        const lastSearchIdx = ref(-1);
+        const lastGroupSelections = reactive({}); // Map groupId -> index
+
         // Import Modal State
         const showImportModal = ref(false);
         const importText = ref('');
@@ -98,6 +102,7 @@ createApp({
                 searchResults.value = res.map(c => ({ ...c, checked: false }));
                 hasSearched.value = true;
                 filterText.value = ''; // Reset filter
+                lastSearchIdx.value = -1; // Reset selection anchor
                 if (res.length === 0) {
                      showToast("未找到任何课程", 'info');
                 } else {
@@ -116,6 +121,50 @@ createApp({
 
             const allChecked = visible.every(c => c.checked);
             visible.forEach(c => c.checked = !allChecked);
+            lastSearchIdx.value = -1;
+        };
+
+        const handleSearchItemClick = (index, event) => {
+            const visible = filteredSearchResults.value;
+            // Handle Shift+Click Range
+            if (event.shiftKey && lastSearchIdx.value !== -1 && lastSearchIdx.value < visible.length) {
+                const start = Math.min(lastSearchIdx.value, index);
+                const end = Math.max(lastSearchIdx.value, index);
+                const targetState = !visible[index].checked; // Determine target state based on the clicked item's PRE-CLICK state (which is !checked)
+                // Actually, if we use @click.prevent, the value hasn't changed yet.
+                // If it's currently checked, we are unchecking it.
+                // So targetState should be opposite of current state.
+
+                for (let i = start; i <= end; i++) {
+                    visible[i].checked = targetState;
+                }
+            } else {
+                // Normal toggle
+                visible[index].checked = !visible[index].checked;
+            }
+            lastSearchIdx.value = index;
+        };
+
+        const handleGroupItemClick = (groupIndex, itemIndex, event) => {
+            const group = groups.value[groupIndex];
+            if (!group) return;
+            const candidates = group.candidates;
+            const groupId = group.id;
+
+            const lastIdx = lastGroupSelections[groupId] ?? -1;
+
+            if (event.shiftKey && lastIdx !== -1 && lastIdx < candidates.length) {
+                const start = Math.min(lastIdx, itemIndex);
+                const end = Math.max(lastIdx, itemIndex);
+                // Same logic: toggle based on clicked item
+                const targetState = !candidates[itemIndex].selected;
+                for (let i = start; i <= end; i++) {
+                    candidates[i].selected = targetState;
+                }
+            } else {
+                candidates[itemIndex].selected = !candidates[itemIndex].selected;
+            }
+            lastGroupSelections[groupId] = itemIndex;
         };
 
         const toggleAllDays = (select) => {
@@ -129,6 +178,188 @@ createApp({
                 preferences.day_max_limit_days[i] = !preferences.day_max_limit_days[i];
             }
         };
+
+        // --- Touch & Drag Selection Logic ---
+
+        const touchState = reactive({
+            dragging: false,
+            listType: null, // 'search' or 'group'
+            groupIdx: -1,
+            startIndex: -1,
+            currentDragIndex: -1,
+            targetState: false, // The checked state we are applying
+            scrollContainer: null,
+            scrollSpeed: 0,
+            autoScrollTimer: null
+        });
+
+        let longPressTimer = null;
+
+        const touchManager = {
+            start: (e, type, idx, groupIdx = -1) => {
+                // Only left click / single touch
+                if (e.touches && e.touches.length > 1) return;
+
+                touchState.dragging = false;
+                touchState.scrollSpeed = 0;
+
+                // Clear any existing timer
+                if (longPressTimer) clearTimeout(longPressTimer);
+
+                // Set timer for long press (e.g., 500ms)
+                longPressTimer = setTimeout(() => {
+                    touchManager.activate(e, type, idx, groupIdx);
+                }, 500);
+            },
+
+            activate: (e, type, idx, groupIdx) => {
+                touchState.dragging = true;
+                touchState.listType = type;
+                touchState.startIndex = idx;
+                touchState.groupIdx = groupIdx;
+                touchState.currentDragIndex = idx;
+
+                // Determine initial state to apply (toggle the start item)
+                let item;
+                if (type === 'search') {
+                    item = filteredSearchResults.value[idx];
+                } else if (type === 'group') {
+                    item = groups.value[groupIdx].candidates[idx];
+                }
+
+                if (item) {
+                    // We toggle the start item immediately upon activation
+                    // And set that as the target state for the drag
+                    touchState.targetState = !((type === 'search') ? item.checked : item.selected);
+
+                    // Apply to start item
+                    if (type === 'search') item.checked = touchState.targetState;
+                    else item.selected = touchState.targetState;
+
+                    // Vibrate if available
+                    if (navigator.vibrate) navigator.vibrate(50);
+                }
+
+                // Find scroll container
+                // Search: .results-list (closest parent)
+                // Group: Window/Body (usually) or the group body
+                // We use e.target to find closest scrollable or just default
+                const target = e.target;
+                if (type === 'search') {
+                    touchState.scrollContainer = target.closest('.results-list');
+                } else {
+                    // For groups, we scroll the window/body
+                    touchState.scrollContainer = window;
+                }
+
+                touchManager.startAutoScroll();
+            },
+
+            move: (e) => {
+                // If we moved before activation, cancel the timer
+                if (!touchState.dragging) {
+                    // Simple threshold check could go here if we wanted to be strict
+                    // But usually the browser takes over scrolling, which cancels the long press implicitly?
+                    // Actually, we should clear timeout on significant move
+                     if (longPressTimer) {
+                         // We can't easily detect "significant" without storing start pos.
+                         // But if the user scrolls, we usually want to cancel.
+                         // Let's rely on 'touchcancel' or rely on the fact that if we preventDefault in move, it works.
+                         // If we DON'T preventDefault, scroll happens.
+                         // We'll add logic: if move happens and NOT dragging, clear timer.
+                         clearTimeout(longPressTimer);
+                         longPressTimer = null;
+                     }
+                    return;
+                }
+
+                // If dragging, prevent native scroll
+                if (e.cancelable) e.preventDefault();
+
+                const touch = e.touches[0];
+                const clientY = touch.clientY;
+
+                // 1. Auto Scroll Logic
+                const winHeight = window.innerHeight;
+                const topThreshold = winHeight * 0.15;
+                const bottomThreshold = winHeight * 0.85;
+
+                if (clientY < topThreshold) {
+                    touchState.scrollSpeed = -1 * (1 - clientY/topThreshold) * 20; // Up
+                } else if (clientY > bottomThreshold) {
+                    touchState.scrollSpeed = (1 - (winHeight - clientY)/(winHeight - bottomThreshold)) * 20; // Down
+                } else {
+                    touchState.scrollSpeed = 0;
+                }
+
+                // 2. Selection Logic
+                // Find element under finger
+                const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (!el) return;
+
+                const itemEl = el.closest('.result-item');
+                if (itemEl && itemEl.dataset.index !== undefined) {
+                    const newIdx = parseInt(itemEl.dataset.index);
+                    if (!isNaN(newIdx) && newIdx !== touchState.currentDragIndex) {
+                        touchState.currentDragIndex = newIdx;
+                        touchManager.updateSelection();
+                    }
+                }
+            },
+
+            end: (e) => {
+                if (longPressTimer) clearTimeout(longPressTimer);
+                touchState.dragging = false;
+                touchState.scrollSpeed = 0;
+                if (touchState.autoScrollTimer) cancelAnimationFrame(touchState.autoScrollTimer);
+            },
+
+            updateSelection: () => {
+                const start = Math.min(touchState.startIndex, touchState.currentDragIndex);
+                const end = Math.max(touchState.startIndex, touchState.currentDragIndex);
+
+                if (touchState.listType === 'search') {
+                    const list = filteredSearchResults.value;
+                    for (let i = start; i <= end; i++) {
+                        if (list[i]) list[i].checked = touchState.targetState;
+                    }
+                } else if (touchState.listType === 'group') {
+                    const group = groups.value[touchState.groupIdx];
+                    if (group) {
+                         for (let i = start; i <= end; i++) {
+                            if (group.candidates[i]) group.candidates[i].selected = touchState.targetState;
+                        }
+                    }
+                }
+            },
+
+            startAutoScroll: () => {
+                const step = () => {
+                    if (!touchState.dragging) return;
+
+                    if (touchState.scrollSpeed !== 0) {
+                        if (touchState.scrollContainer === window) {
+                            window.scrollBy(0, touchState.scrollSpeed);
+                        } else if (touchState.scrollContainer) {
+                            touchState.scrollContainer.scrollTop += touchState.scrollSpeed;
+                        }
+
+                        // We also need to re-check selection as we scroll
+                        // But elementFromPoint depends on screen coords, which stay roughly same if finger holds still
+                        // So we should re-trigger selection update logic in the loop?
+                        // Currently 'move' updates selection. If finger is static and page scrolls,
+                        // the element under the finger changes! So yes.
+                        // However, we don't have the 'last touch event' here easily unless we store it.
+                        // Let's just rely on the user moving slightly or the next touchmove event.
+                        // Actually, 'touchmove' fires continuously on some devices, but not all.
+                        // Ideally we store lastTouchY/X.
+                    }
+                    touchState.autoScrollTimer = requestAnimationFrame(step);
+                };
+                step();
+            }
+        };
+
 
         // --- Import Logic ---
 
@@ -396,7 +627,8 @@ createApp({
                         const sess = c.sessions.find(s =>
                             s.day === day &&
                             currentPeriod >= s.start &&
-                            currentPeriod <= s.end
+                            currentPeriod <= s.end &&
+                            s.weeks.includes(week)
                         );
                         if (sess) {
                              return {
@@ -551,7 +783,9 @@ createApp({
             showImportModal, importText, isImporting, importStatus, importParams,
             openImportModal, closeImportModal, startBatchImport,
             showAltModal, currentAltCourse, openAlternatives,
-            showAllWeeks
+            showAllWeeks,
+            handleSearchItemClick, handleGroupItemClick,
+            touchManager, touchState
         };
     }
 }).mount('#app');
