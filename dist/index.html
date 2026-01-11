@@ -17,7 +17,7 @@
         button:hover { opacity: 0.9; }
         button.secondary { background: #ccc; }
         button.danger { background: #b00020; color: white; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .card { min-height: 500px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
 
         /* Navigation */
         .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; justify-content: space-between; width: 90%; z-index: 50;position: relative;}
@@ -32,7 +32,7 @@
         .search-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 10px; }
         input:not([type="checkbox"]), select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
         input[type="checkbox"] { width: 20px; height: 20px; margin-right: 10px; cursor: pointer; }
-        .results-list { max-height: 400px; overflow-y: auto; margin-top: 10px; }
+        .results-list { overflow-y: auto; margin-top: 10px; }
         .result-item { border-bottom: 1px solid #eee; padding: 10px; display: flex; align-items: start; gap: 10px; }
 
         /* Groups */
@@ -100,6 +100,7 @@
             <!-- View 1: Search -->
             <div v-show="currentView==='search'" class="card">
                 <h2>添加备选课程组</h2>
+                <div style="height: 10px;"></div>
                 <div class="search-grid" style="display: flex; width: 100%; gap: 5; align-items: stretch;">
                     <input
                         v-model="searchParams.name"
@@ -145,7 +146,7 @@
                         {{ loading ? '...' : '搜索' }}
                     </button>
 
-                    <button class="secondary" @click="openImportModal" style="flex-shrink: 0; white-space: nowrap; box-sizing: border-box; margin-left: 5px;">批量导入</button>
+                    <button class="secondary" @click="openImportModal" style="flex-shrink: 0; white-space: nowrap; box-sizing: border-box; margin-left: 5px; color:#1976d2">批量导入</button>
                 </div>
 
                 <div v-if="hasSearched">
@@ -186,6 +187,7 @@
                     <h2>我的课程组 ({{ groups.length }})</h2>
                     <!-- Imported moved to View 1 -->
                 </div>
+                <div style="height: 10px;"></div>
                 <div v-if="groups.length === 0">暂无课程组，请先去搜索添加或批量导入。</div>
 
                 <div v-for="(group, idx) in groups" :key="group.id" class="group-item">
@@ -273,7 +275,7 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                             <h2 style="margin:0;">第 {{ currentScheduleIdx + 1 }} 方案课表</h2>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <label style="font-size: 0.9rem; cursor: pointer;">
+                                <label style="font-size: 0.9rem; cursor: pointer;" style="display: inline-block; align-items: center;">
                                     <input type="checkbox" v-model="showAllWeeks"> 显示非本周课程
                                 </label>
                                 <div>
@@ -323,7 +325,7 @@
                                             <div style="font-size: 0.8em;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).teacher }}</div>
                                             <div style="font-size: 0.8em;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).location }}</div>
                                             <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives && getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives.length > 1"
-                                                 style="background: #1976d2; color: white; border-radius: 10px; padding: 0 4px; font-size: 0.7em; display: inline-block; margin-top: 2px;">
+                                                 style="background: #1976d2; color: white; border-radius: 10px; padding: 0 4px; font-size: 0.7em; display: inline-block; margin-top: 2px;" width="min">
                                                 可选老师+{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives.length - 1 }}
                                             </div>
                                         </div>
