@@ -5,10 +5,13 @@ class ScheduleRanker {
         let totalPenalty = 0.0;
         let totalBonus = 0.0;
 
-        // 0. Merge bitmaps into fullBitmap (BigInt array)
-        // Also merge bitmaps for non-skippable courses into scoringBitmap
+        // 0. Bitmaps
+        // fullBitmap: All courses (for debugging/future use)
+        // scoringBitmap: Non-skippable courses (Main Penalty, Weight 1.0)
+        // skippableBitmap: Skippable courses (Shadow Penalty, Weight 0.01)
         const fullBitmap = Array(30).fill(0n);
         const scoringBitmap = Array(30).fill(0n);
+        const skippableBitmap = Array(30).fill(0n);
 
         for (const course of schedule) {
             const cb = course.schedule_bitmaps || [];
@@ -25,147 +28,201 @@ class ScheduleRanker {
                     fullBitmap[w] |= val;
                     if (!isSkippable) {
                         scoringBitmap[w] |= val;
+                    } else {
+                        skippableBitmap[w] |= val;
                     }
                 }
             }
         }
 
-        // Use scoringBitmap for penalties
+        // Helper to calculate penalty for a given bitmap and weight
+        const calcPenalty = (bitmap, weight, isShadow = false) => {
+            let p = 0.0;
 
-        // 1. Avoid Early Morning
-        if (preferences.avoid_early_morning) {
-            let penalty = 0;
-            // Iterate weeks 1 to 25
-            for (let w = 1; w <= 25; w++) {
-                const mask = scoringBitmap[w];
-                if (mask === 0n) continue;
-
-                let earlyMask = 0n;
-                for (let d = 0; d < 7; d++) {
-                    earlyMask |= (1n << BigInt(d * 13 + 0)); // Node 1
-                    earlyMask |= (1n << BigInt(d * 13 + 1)); // Node 2
+            // 1. Avoid Early Morning
+            if (preferences.avoid_early_morning) {
+                let count = 0;
+                for (let w = 1; w <= 25; w++) {
+                    const mask = bitmap[w];
+                    if (mask === 0n) continue;
+                    let earlyMask = 0n;
+                    for (let d = 0; d < 7; d++) {
+                        earlyMask |= (1n << BigInt(d * 13 + 0)); // Node 1
+                        earlyMask |= (1n << BigInt(d * 13 + 1)); // Node 2
+                    }
+                    if ((mask & earlyMask) !== 0n) count++;
                 }
-
-                if ((mask & earlyMask) !== 0n) {
-                    penalty += 1;
-                }
-            }
-            const pVal = penalty * 2.0;
-            totalPenalty += pVal;
-            details['早八回避'] = -pVal;
-        }
-
-        // 2. Avoid Weekend
-        if (preferences.avoid_weekend) {
-            let penalty = 0;
-            let weekendMask = 0n;
-            for (let node = 0; node < 13; node++) {
-                weekendMask |= (1n << BigInt(5 * 13 + node)); // Sat
-                weekendMask |= (1n << BigInt(6 * 13 + node)); // Sun
+                const val = count * 2.0 * weight;
+                p += val;
+                if (!isShadow) details['早八回避'] = -val;
             }
 
-            for (let w = 1; w <= 25; w++) {
-                if ((scoringBitmap[w] & weekendMask) !== 0n) {
-                    penalty += 1;
+            // 2. Avoid Weekend
+            if (preferences.avoid_weekend) {
+                let count = 0;
+                let weekendMask = 0n;
+                for (let node = 0; node < 13; node++) {
+                    weekendMask |= (1n << BigInt(5 * 13 + node)); // Sat
+                    weekendMask |= (1n << BigInt(6 * 13 + node)); // Sun
+                }
+                for (let w = 1; w <= 25; w++) {
+                    if ((bitmap[w] & weekendMask) !== 0n) count++;
+                }
+                const val = count * 2.0 * weight;
+                p += val;
+                if (!isShadow) details['周末回避'] = -val;
+            }
+
+            // 3. Compactness
+            if (preferences.compactness === 'high' || preferences.compactness === 'low') {
+                let totalGaps = 0;
+                for (let w = 1; w <= 25; w++) {
+                    const mask = bitmap[w];
+                    if (mask === 0n) continue;
+                    for (let d = 0; d < 5; d++) { // Mon-Fri
+                        const dayBits = (mask >> BigInt(d * 13)) & 0x1FFFn;
+                        if (dayBits === 0n) continue;
+
+                        let hasStarted = false;
+                        let gapCount = 0;
+                        let currentGap = 0;
+
+                        for (let i = 0; i < 13; i++) {
+                            const isSet = (dayBits >> BigInt(i)) & 1n;
+                            if (isSet) {
+                                if (hasStarted && currentGap > 0) {
+                                    gapCount += currentGap;
+                                }
+                                hasStarted = true;
+                                currentGap = 0;
+                            } else if (hasStarted) {
+                                currentGap += 1;
+                            }
+                        }
+                        totalGaps += gapCount;
+                    }
+                }
+
+                if (preferences.compactness === 'high') {
+                    const val = totalGaps * 0.2 * weight;
+                    p += val;
+                    if (!isShadow) details['课程紧凑'] = -val;
+                } else {
+                    // For shadow penalty, we treat 'low' compactness bonus as negative penalty?
+                    // Or just ignore bonus for shadow to keep it simple?
+                    // Let's implement bonus as negative penalty.
+                    const val = totalGaps * 0.2 * weight;
+                    // Bonus means score increases. Penalty means score decreases.
+                    // If compact=low, we want MORE gaps.
+                    // So totalGaps contributes to BONUS.
+                    // Score = Base + Bonus - Penalty.
+                    // Here p is Penalty accumulator.
+                    // So we should SUBTRACT from p?
+                    // Wait, existing logic: totalBonus += val.
+                    // So return { penalty, bonus }.
+                    // Let's keep it simple: Shadow penalty only considers NEGATIVE traits (Penalties).
+                    // We ignore Compactness Bonus for shadow to avoid complexity.
+                    if (!isShadow) {
+                        // Handled outside or allow this function to return object?
+                        // Let's just handle non-shadow compactness separately if needed.
+                        // But for simplicity, let's just do the penalty part here.
+                        // If compact=low (Bonus), we skip adding to 'p'.
+                    }
                 }
             }
-            const pVal = penalty * 2.0;
-            totalPenalty += pVal;
-            details['周末回避'] = -pVal;
-        }
 
-        // 3. Compactness
-        if (preferences.compactness === 'high' || preferences.compactness === 'low') {
+            // 4. Day Max Limit
+            if (preferences.day_max_limit_enabled) {
+                const limitVal = preferences.day_max_limit_value ?? 4;
+                let targetDays = preferences.day_max_limit_days || [];
+                if (targetDays.length < 7) {
+                    targetDays = targetDays.concat(Array(7 - targetDays.length).fill(false));
+                }
+
+                let penalty = 0;
+                for (let w = 1; w <= 25; w++) {
+                    const mask = bitmap[w];
+                    if (mask === 0n) continue;
+                    for (let d = 0; d < 7; d++) {
+                        if (!targetDays[d]) continue;
+                        const dayBits = (mask >> BigInt(d * 13)) & 0x1FFFn;
+                        const count = ScheduleRanker.countSetBits(dayBits);
+                        if (count > limitVal) {
+                            const diff = count - limitVal;
+                            penalty += diff * 2.0;
+                        }
+                    }
+                }
+                const val = penalty * weight;
+                p += val;
+                if (!isShadow) details['特定日限制'] = -val;
+            }
+
+            // 5. Quality Sleep (Avoid 8-13)
+            // User Update: Should start from Node 9 (Index 8).
+            // Nodes are 0-indexed (0-12) corresponding to 1-13.
+            // Node 9 (1-based) is index 8.
+            // Node 13 (1-based) is index 12.
+            if (preferences.quality_sleep) {
+                let count = 0;
+                for (let w = 1; w <= 25; w++) {
+                    const mask = bitmap[w];
+                    if (mask === 0n) continue;
+
+                    let sleepMask = 0n;
+                    for (let d = 0; d < 7; d++) {
+                         for (let n = 8; n <= 12; n++) { // Corrected range 9-13 (indices 8-12)
+                             sleepMask |= (1n << BigInt(d * 13 + n));
+                         }
+                    }
+
+                    if ((mask & sleepMask) !== 0n) {
+                        count++;
+                    }
+                }
+                const val = count * 2.0 * weight;
+                p += val;
+                if (!isShadow) details['优质睡眠'] = -val;
+            }
+
+            return p;
+        };
+
+        // Calculate Main Penalty (Weight 1.0)
+        const mainPenalty = calcPenalty(scoringBitmap, 1.0, false);
+        totalPenalty += mainPenalty;
+
+        // Calculate Shadow Penalty (Weight 0.01)
+        const shadowPenalty = calcPenalty(skippableBitmap, 0.01, true);
+        totalPenalty += shadowPenalty;
+
+        // Handle Compactness Bonus explicitly for Main (since helper ignored it or we need to be careful)
+        // Re-implement Compactness Bonus for Main only to match exact logic of previous version
+        if (preferences.compactness === 'low') {
             let totalGaps = 0;
             for (let w = 1; w <= 25; w++) {
                 const mask = scoringBitmap[w];
                 if (mask === 0n) continue;
-                for (let d = 0; d < 5; d++) { // Mon-Fri
+                for (let d = 0; d < 5; d++) {
                     const dayBits = (mask >> BigInt(d * 13)) & 0x1FFFn;
                     if (dayBits === 0n) continue;
-
                     let hasStarted = false;
-                    let gapCount = 0;
                     let currentGap = 0;
-
                     for (let i = 0; i < 13; i++) {
                         const isSet = (dayBits >> BigInt(i)) & 1n;
                         if (isSet) {
-                            if (hasStarted && currentGap > 0) {
-                                gapCount += currentGap;
-                            }
+                            if (hasStarted && currentGap > 0) totalGaps += currentGap;
                             hasStarted = true;
                             currentGap = 0;
                         } else if (hasStarted) {
                             currentGap += 1;
                         }
                     }
-                    totalGaps += gapCount;
                 }
             }
-
-            if (preferences.compactness === 'high') {
-                const pVal = totalGaps * 0.2;
-                totalPenalty += pVal;
-                details['课程紧凑'] = -pVal;
-            } else {
-                const bVal = totalGaps * 0.2;
-                totalBonus += bVal;
-                details['课程分散'] = +bVal;
-            }
-        }
-
-
-        if (preferences.day_max_limit_enabled) {
-            const limitVal = preferences.day_max_limit_value ?? 4;
-            let targetDays = preferences.day_max_limit_days || [];
-            if (targetDays.length < 7) {
-                targetDays = targetDays.concat(Array(7 - targetDays.length).fill(false));
-            }
-
-            let penalty = 0;
-            for (let w = 1; w <= 25; w++) {
-                const mask = scoringBitmap[w];
-                if (mask === 0n) continue;
-                for (let d = 0; d < 7; d++) {
-                    if (!targetDays[d]) continue;
-                    const dayBits = (mask >> BigInt(d * 13)) & 0x1FFFn;
-                    const count = ScheduleRanker.countSetBits(dayBits);
-                    if (count > limitVal) {
-                        const diff = count - limitVal;
-                        penalty += diff * 2.0;
-                    }
-                }
-            }
-            const pVal = penalty;
-            totalPenalty += pVal;
-            details['特定日限制'] = -pVal;
-        }
-
-        // 5. Quality Sleep (Avoid 9-13)
-        if (preferences.quality_sleep) {
-            let penalty = 0;
-            for (let w = 1; w <= 25; w++) {
-                const mask = scoringBitmap[w];
-                if (mask === 0n) continue;
-
-                let sleepMask = 0n;
-                for (let d = 0; d < 7; d++) {
-                     // Node 9 to 13
-                     // Nodes are 1-based in my comments, but 0-12 in bits.
-                     // 1=0, 2=1, ..., 9=8, 13=12.
-                     for (let n = 8; n <= 12; n++) {
-                         sleepMask |= (1n << BigInt(d * 13 + n));
-                     }
-                }
-
-                if ((mask & sleepMask) !== 0n) {
-                    penalty += 1;
-                }
-            }
-            const pVal = penalty * 2.0;
-            totalPenalty += pVal;
-            details['优质睡眠'] = -pVal;
+            const bVal = totalGaps * 0.2;
+            totalBonus += bVal;
+            details['课程分散'] = +bVal;
         }
 
         return {
@@ -230,6 +287,10 @@ class ScheduleSolver {
                 const activeB = groups[j].candidates.filter(c => c.selected);
 
                 if (activeA.length === 0 || activeB.length === 0) continue;
+
+                // If either group is skippable, they do not cause hard conflicts.
+                // We treat them as ghosts that can overlap anything.
+                if (groups[i].is_skippable || groups[j].is_skippable) continue;
 
                 let allConflict = true;
                 let firstReason = null;
@@ -298,9 +359,6 @@ class ScheduleSolver {
             } else {
                 const existing = mergedGroupsMap.get(courseName);
                 existing.candidates = existing.candidates.concat(active);
-                // If any part of the merged group is marked skippable, we might want to respect that?
-                // Or should we enforce that if one part is skippable, the whole thing is?
-                // User sets 'skippable' on the Group. If we merge groups by name, we should probably OR the flag.
                 if (g.is_skippable) existing.is_skippable = true;
             }
         }
@@ -332,8 +390,6 @@ class ScheduleSolver {
                 });
             }
 
-            // Sort by density (heuristic: fewer classes first might leave more room? or opposite?)
-            // Just stick to density sort
             metaCandidates.sort((a, b) => {
                 const countA = a.bitmaps.reduce((acc, val) => acc + ScheduleRanker.countSetBits(val), 0);
                 const countB = b.bitmaps.reduce((acc, val) => acc + ScheduleRanker.countSetBits(val), 0);
@@ -346,7 +402,7 @@ class ScheduleSolver {
             });
         }
 
-        // Sort groups by size (MRV - Minimum Remaining Values) to fail fast
+        // Sort groups by size (MRV)
         metaGroups.sort((a, b) => a.candidates.length - b.candidates.length);
 
         const totalGroupsCount = metaGroups.length;
@@ -360,21 +416,15 @@ class ScheduleSolver {
         function backtrack(groupIdx, currentScheduleMeta) {
             const scheduledCount = currentScheduleMeta.length;
 
-            // Base Case: All groups processed
             if (groupIdx === totalGroupsCount) {
-                // We reached a leaf. Update maxCoursesFound
                 if (scheduledCount > maxCoursesFound) {
                     maxCoursesFound = scheduledCount;
-                    // Clear heap because we found a better size?
-                    // Usually we prefer larger schedules over higher scores of smaller schedules.
-                    // Yes: "must arrange as many courses as possible first"
                     topNHeap.length = 0;
                 }
 
                 if (scheduledCount === maxCoursesFound) {
                     totalFound++;
 
-                    // Reconstruct
                     const finalSchedule = currentScheduleMeta.map(m => {
                         const rep = { ...m.representative };
                         rep.alternatives = m.alternatives;
@@ -382,7 +432,6 @@ class ScheduleSolver {
                         return rep;
                     });
 
-                    // Missing Groups
                     const presentNames = new Set(finalSchedule.map(c => c.name));
                     const missingNames = [];
                     for(const mg of metaGroups) {
@@ -392,12 +441,9 @@ class ScheduleSolver {
                     }
 
                     const missingCount = missingNames.length;
-
-                    // Score
                     const evalResult = ScheduleRanker.evaluateSchedule(finalSchedule, preferences);
                     let score = evalResult.score;
 
-                    // Apply Missing Penalty
                     const penalty = missingCount * 10.0;
                     score -= penalty;
 
@@ -408,7 +454,6 @@ class ScheduleSolver {
                         missingCount,
                         details: evalResult.details
                     };
-                    // Add missing penalty to details for display
                     if (missingCount > 0) {
                         entry.details['缺课惩罚'] = -penalty;
                     }
@@ -424,14 +469,17 @@ class ScheduleSolver {
                 return;
             }
 
-            // Pruning: Calculate Future Potential
-            // Count how many future groups have AT LEAST ONE candidate compatible with currentBitmap
             let compatibleFuture = 0;
             for (let i = groupIdx; i < totalGroupsCount; i++) {
                 const group = metaGroups[i];
+                // Skippable groups are always compatible because they don't check conflicts
+                if (group.candidates[0].is_skippable) {
+                    compatibleFuture++;
+                    continue;
+                }
+
                 let canFit = false;
                 for (const cand of group.candidates) {
-                    // Check compatibility
                     let ok = true;
                     const limit = Math.min(cand.bitmaps.length, currentBitmap.length);
                     for (let w = 1; w < limit; w++) {
@@ -449,57 +497,59 @@ class ScheduleSolver {
             }
 
             if (scheduledCount + compatibleFuture < maxCoursesFound) {
-                // Cannot possibly beat the best found size
                 return;
             }
 
-            // Branch 1: Try to pick a candidate from current group
             const currentGroup = metaGroups[groupIdx];
-            let pickedSomething = false;
 
             for (const meta of currentGroup.candidates) {
                 const metaBmp = meta.bitmaps;
-
-                // Check Conflict
+                const isSkippable = meta.is_skippable;
                 let isValid = true;
-                const limit = Math.min(metaBmp.length, currentBitmap.length);
-                for (let w = 1; w < limit; w++) {
-                    if ((metaBmp[w] & currentBitmap[w]) !== 0n) {
-                        isValid = false;
-                        break;
+
+                // If skippable, we ignore conflict checks (Ghost Mode)
+                if (!isSkippable) {
+                    const limit = Math.min(metaBmp.length, currentBitmap.length);
+                    for (let w = 1; w < limit; w++) {
+                        if ((metaBmp[w] & currentBitmap[w]) !== 0n) {
+                            isValid = false;
+                            break;
+                        }
                     }
                 }
 
                 if (!isValid) continue;
 
-
-
                 currentScheduleMeta.push(meta);
-                // Update bitmap
-                for (let w = 1; w < limit; w++) {
-                    currentBitmap[w] |= metaBmp[w];
+
+                // If skippable, we do NOT occupy space in currentBitmap
+                if (!isSkippable) {
+                    const limit = Math.min(metaBmp.length, currentBitmap.length);
+                    for (let w = 1; w < limit; w++) {
+                        currentBitmap[w] |= metaBmp[w];
+                    }
                 }
 
                 backtrack(groupIdx + 1, currentScheduleMeta);
 
-                // Backtrack
                 currentScheduleMeta.pop();
-                for (let w = 1; w < limit; w++) {
-                    currentBitmap[w] ^= metaBmp[w]; // Unset
-                }
-                pickedSomething = true;
-            }
 
+                // Backtrack bitmap
+                if (!isSkippable) {
+                    const limit = Math.min(metaBmp.length, currentBitmap.length);
+                    for (let w = 1; w < limit; w++) {
+                        currentBitmap[w] ^= metaBmp[w];
+                    }
+                }
+            }
 
             backtrack(groupIdx + 1, currentScheduleMeta);
         }
 
         backtrack(0, []);
 
-        // Sort descending
         const sortedResults = topNHeap.sort((a, b) => b.score - a.score);
 
-        // Map to final format
         const finalSchedules = sortedResults.map(item => {
             const sched = item.schedule;
 
@@ -507,7 +557,7 @@ class ScheduleSolver {
             let totalHours = 0;
             let actualTotalHours = 0;
             const weekSet = new Set();
-            const countedCourses = new Set(); // Prevent double counting credits/hours for same-named courses
+            const countedCourses = new Set();
 
             sched.forEach(c => {
                  if (!countedCourses.has(c.name)) {
@@ -535,7 +585,7 @@ class ScheduleSolver {
                 score_details: item.details,
                 courses: sched,
                 missing_course_names: item.missingNames,
-                missing_groups: [], // user didn't ask for IDs, just names in UI.
+                missing_groups: [],
                 stats: {
                     total_credits: totalCredits,
                     total_hours: totalHours,
@@ -554,7 +604,6 @@ class ScheduleSolver {
     }
 }
 
-// Export
 if (typeof window !== 'undefined') {
     window.Solver = ScheduleSolver;
     window.Ranker = ScheduleRanker;
