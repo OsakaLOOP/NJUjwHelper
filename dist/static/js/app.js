@@ -619,8 +619,7 @@ createApp({
                         const sess = c.sessions.find(s =>
                             s.day === day &&
                             currentPeriod >= s.start &&
-                            currentPeriod <= s.end &&
-                            s.weeks.includes(week)
+                            currentPeriod <= s.end
                         );
                         if (sess) {
                              return {
