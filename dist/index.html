@@ -21,8 +21,12 @@
 
         /* Navigation */
         .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; justify-content: space-between; width: 90%; }
-        .nav-tab { padding: 10px 20px; background: #ddd; border-radius: 4px; cursor: pointer; }
+        .nav-tab { padding: 10px 20px; background: #ddd; border-radius: 0 0 8px 8px; transition: background 0.2s, transform 0.1s; cursor: pointer; }
         .nav-tab.active { background: #630560; color: white; }
+        .nav-tab:hover:not(.active) {
+    background: #e0e0e0;
+    transform: translateY(-2px);
+}
 
         /* Search */
         .search-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 10px; }
@@ -76,7 +80,7 @@
             <div :class="['nav-tab', currentView==='planning'?'active':'']" @click="currentView='planning'">2. 规划 & 策略</div>
             <div :class="['nav-tab', currentView==='results'?'active':'']" @click="currentView='results'">3. 结果 & 课表</div>
             </div>
-            <div style="display: flex; align-items: center; font-size: 1rem; color: #888; font-family: 'Consolas', 'Monaco', monospace; letter-spacing: -0.02em;">
+            <div style="display: flex; align-items: baseline; font-size: 1rem; color: #888; font-family: 'Consolas', 'Monaco', monospace; letter-spacing: -0.02em;">
                 <span style="display: inline-block; transform: scaleX(-1); margin-right: 5px; font-size: 1.1em;" aria-label="Copyleft icon">&copy;</span>
                 <span>
                     <a href="https://github.com/OsakaLOOP" target="_blank" style="color: inherit; text-decoration: none; border-bottom: 1px solid #eee;">@OsakaLOOP</a>
@@ -345,7 +349,7 @@
         <div v-if="showImportModal" style="position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000;">
             <div style="background: white; padding: 20px; border-radius: 8px; width: 600px; max-width: 90%; display: flex; flex-direction: column; gap: 10px;">
                 <h3>批量导入课程</h3>
-                <p style="font-size: 0.9em; color: #666;">请粘贴来自<a href="https://ehallapp.nju.edu.cn/jwapp/sys/qxfacx/*default/index.do" target="_blank">"学期培养方案"-查看详情-切换学年模式-第x学期</a>的完整表格内容 (包含课程号、课程名等)</p>
+                <p style="font-size: 0.9em; color: #666;">请粘贴来自<a href="https://ehallapp.nju.edu.cn/jwapp/sys/qxfacx/*default/index.do" target="_blank">"学期培养方案"-查看详情-切换学年模式-第x学期</a>的完整表格内容</br>或者至少每行要有课程号、课程名</br><span style="color: crimson;">请务必检查课程组内选中是否都为所需, 否则导致规划错误.</span></p>
                 <textarea v-model="importText" rows="10" placeholder="粘贴内容到此处..." style="width: 100%; box-sizing: border-box;"></textarea>
 
                 <div style="display: flex; gap: 10px;">

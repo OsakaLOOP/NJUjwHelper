@@ -107,7 +107,7 @@ class ScheduleRanker {
 
 
         if (preferences.day_max_limit_enabled) {
-            const limitVal = preferences.day_max_limit_value || 4;
+            const limitVal = preferences.day_max_limit_value ?? 4;
             let targetDays = preferences.day_max_limit_days || [];
             if (targetDays.length < 7) {
                 targetDays = targetDays.concat(Array(7 - targetDays.length).fill(false));
@@ -123,7 +123,7 @@ class ScheduleRanker {
                     const count = ScheduleRanker.countSetBits(dayBits);
                     if (count > limitVal) {
                         const diff = count - limitVal;
-                        penalty += diff * 50.0;
+                        penalty += diff * 2.0;
                     }
                 }
             }
@@ -337,16 +337,11 @@ class ScheduleSolver {
             }
 
             // Pruning (Optional)
-            if (topNHeap.length === maxResults) {
+            /*if (topNHeap.length === maxResults) {
                  const partialSched = currentScheduleMeta.map(m => m.representative);
                  const partialScore = ScheduleRanker.scoreSchedule(partialSched, preferences);
-                 // Heuristic: If partial score is significantly lower than current min topN, abort.
-                 // This depends on whether score can increase. Here, penalties decrease score, bonuses increase.
-                 // So strictly speaking, score can go down or up.
-                 // Without a strict upper bound function, aggressive pruning is risky.
-                 // Let's skip pruning for simplicity in JS or implement a loose check.
                  if (partialScore < topNHeap[0].score - 50) return;
-            }
+            }*/
 
             const candidates = metaGroups[groupIdx];
 
@@ -364,11 +359,35 @@ class ScheduleSolver {
                 }
 
                 if (!isValid) continue;
+                //forward check
+                let futureIsDead = false;
 
-                // Apply
-                for (let w = 1; w < limit; w++) {
-                    currentBitmap[w] |= metaBmp[w];
+                for (let nextG = groupIdx + 1; nextG < metaGroups.length; nextG++) {
+                    let nextCandidate = false;
+
+                    for (const nextMeta of metaGroups[nextG]) {
+                        let conflictFound = false;
+                        const limitF = Math.min(nextMeta.bitmaps.length, currentBitmap.length);
+                        // Apply
+                        for (let w = 1; w < limitF; w++) {
+                            if (((currentBitmap[w] | metaBmp[w]) & nextMeta.bitmaps[w]) !== 0n) {
+                                conflictFound = true;
+                                break;
+                            }
+                        }
+
+                        if (!conflictFound) {
+                            nextCandidate = true;
+                            break;
+                        }
+                    }
+                    if (!nextCandidate) {
+                        futureIsDead = true;
+                        break;
+                    }
                 }
+
+                if (futureIsDead) continue;
 
                 currentScheduleMeta.push(meta);
 
@@ -378,9 +397,6 @@ class ScheduleSolver {
                 currentScheduleMeta.pop();
                 for (let w = 1; w < limit; w++) {
                     currentBitmap[w] ^= metaBmp[w]; // XOR to unset
-                    // Wait! XOR is only safe if we know the bit was 0 before.
-                    // Here, because we checked for conflict (AND == 0), we know bits were 0.
-                    // So XOR is correct to restore to 0.
                 }
             }
         }
