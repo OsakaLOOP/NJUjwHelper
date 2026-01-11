@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.ico">
     <title>🐋南哪选课助手</title>
     <script src="static/vue.global.js"></script>
     <script src="static/html2canvas.min.js"></script>
@@ -19,7 +20,7 @@
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
 
         /* Navigation */
-        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; justify-content: space-between; width: 90%; }
         .nav-tab { padding: 10px 20px; background: #ddd; border-radius: 4px; cursor: pointer; }
         .nav-tab.active { background: #630560; color: white; }
 
@@ -61,31 +62,34 @@
             <h1>
                 🐋南哪选课助手
                 <span v-if="groups.length > 0" style="font-size: 0.8em; margin-left: 10px; font-weight: normal;">当前组数: {{ groups.length }}</span>
-                <span style="font-size: 0.7rem; font-weight: normal; margin-left: 15px; opacity: 0.8;">本app所有内容在本地处理, 仅获取必要的cookie, 不存储用户密码. 所有内容仅为算法生成, 不作为完全参考.</span>
+                <span style="font-size: 0.7rem; font-weight: normal; margin-left: 15px; opacity: 0.8;">本 Web App 所有内容在用户端计算, 不存储用户密码. 所有内容仅为算法生成, 不作为完全参考.</span>
             </h1>
             <div>
                 <button @click="saveSession" class="secondary" style="margin-right: 10px;">保存进度</button>
                 <button @click="newSession" class="danger">重置</button>
             </div>
         </header>
-
-        <div class="container">
-            <div class="nav-tabs">
-                <div :class="['nav-tab', currentView==='search'?'active':'']" @click="currentView='search'">1. 课程查询</div>
-                <div :class="['nav-tab', currentView==='planning'?'active':'']" @click="currentView='planning'">2. 规划 & 策略</div>
-                <div :class="['nav-tab', currentView==='results'?'active':'']" @click="currentView='results'">3. 结果 & 课表</div>
-                <div style="display: flex; align-items: center; font-size: 1rem; color: #888; font-family: 'Consolas', 'Monaco', monospace; letter-spacing: -0.02em;">
-                    <span style="display: inline-block; transform: scaleX(-1); margin-right: 5px; font-size: 1.1em;" aria-label="Copyleft icon">&copy;</span>
-                    <span>
-                        <a href="https://github.com/OsakaLOOP" target="_blank" style="color: inherit; text-decoration: none; border-bottom: 1px solid #eee;">@OsakaLOOP</a>
-                        <span style="margin: 0 8px; opacity: 0.4;">|</span>
-                        Licensed under
-                        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" style="color: #630560; text-decoration: none; font-weight: 600;">GPL v3.0</a>
-                        <span style="margin: 0 8px; opacity: 0.4;">|</span>
-                        数据源: <a href="https://jw.nju.edu.cn" target="_blank" style="color: #630560; text-decoration: none; font-weight: 600;">南大教服平台 - 全校课程表</a>
-                    </span>
-                </div>
+        <div style="height: 15px;"></div>
+        <div class="nav-tabs" >
+            <div style="display: flex; gap: 10px;">
+            <div :class="['nav-tab', currentView==='search'?'active':'']" @click="currentView='search'">1. 课程查询</div>
+            <div :class="['nav-tab', currentView==='planning'?'active':'']" @click="currentView='planning'">2. 规划 & 策略</div>
+            <div :class="['nav-tab', currentView==='results'?'active':'']" @click="currentView='results'">3. 结果 & 课表</div>
             </div>
+            <div style="display: flex; align-items: center; font-size: 1rem; color: #888; font-family: 'Consolas', 'Monaco', monospace; letter-spacing: -0.02em;">
+                <span style="display: inline-block; transform: scaleX(-1); margin-right: 5px; font-size: 1.1em;" aria-label="Copyleft icon">&copy;</span>
+                <span>
+                    <a href="https://github.com/OsakaLOOP" target="_blank" style="color: inherit; text-decoration: none; border-bottom: 1px solid #eee;">@OsakaLOOP</a>
+                    <span style="margin: 0 8px; opacity: 0.4;">|</span>
+                    Licensed under
+                    <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" style="color: #630560; text-decoration: none; font-weight: 600;">GPL v3.0</a>
+                    <span style="margin: 0 8px; opacity: 0.4;">|</span>
+                    数据源: <a href="https://jw.nju.edu.cn" target="_blank" style="color: #630560; text-decoration: none; font-weight: 600;">南大教服平台 - 全校课程表</a> 最后爬取: 2026-01-10
+                </span>
+            </div>
+        </div>
+        <div class="container">
+            
 
             <!-- View 1: Search -->
             <div v-show="currentView==='search'" class="card">
@@ -341,7 +345,7 @@
         <div v-if="showImportModal" style="position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000;">
             <div style="background: white; padding: 20px; border-radius: 8px; width: 600px; max-width: 90%; display: flex; flex-direction: column; gap: 10px;">
                 <h3>批量导入课程</h3>
-                <p style="font-size: 0.9em; color: #666;">请粘贴来自<a href="https://ehallapp.nju.edu.cn/jwapp/sys/qxfacx/*default/index.do" target="_blank">"学期培养方案"</a>的表格内容 (包含课程号、课程名等)</p>
+                <p style="font-size: 0.9em; color: #666;">请粘贴来自<a href="https://ehallapp.nju.edu.cn/jwapp/sys/qxfacx/*default/index.do" target="_blank">"学期培养方案"-查看详情-切换学年模式-第x学期</a>的完整表格内容 (包含课程号、课程名等)</p>
                 <textarea v-model="importText" rows="10" placeholder="粘贴内容到此处..." style="width: 100%; box-sizing: border-box;"></textarea>
 
                 <div style="display: flex; gap: 10px;">

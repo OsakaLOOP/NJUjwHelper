@@ -1,6 +1,3 @@
-// Ported from backend/solver.py and backend/ranker.py
-// Using BigInt for bitwise operations
-
 class ScheduleRanker {
     static evaluateSchedule(schedule, preferences) {
         let baseScore = 100.0;
@@ -108,27 +105,7 @@ class ScheduleRanker {
             }
         }
 
-        // 4. Max Daily Load
-        const limit = preferences.max_daily_load;
-        if (limit && limit > 0) {
-            let overload = 0;
-            for (let w = 1; w <= 25; w++) {
-                const mask = fullBitmap[w];
-                if (mask === 0n) continue;
-                for (let d = 0; d < 7; d++) {
-                    const dayBits = (mask >> BigInt(d * 13)) & 0x1FFFn;
-                    const count = ScheduleRanker.countSetBits(dayBits);
-                    if (count > limit) {
-                        overload += (count - limit);
-                    }
-                }
-            }
-            const pVal = overload * 5.0;
-            totalPenalty += pVal;
-            details['每日负载'] = -pVal;
-        }
 
-        // 5. Day Max Limit
         if (preferences.day_max_limit_enabled) {
             const limitVal = preferences.day_max_limit_value || 4;
             let targetDays = preferences.day_max_limit_days || [];

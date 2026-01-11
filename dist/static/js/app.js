@@ -4,16 +4,15 @@ createApp({
     setup() {
         const currentView = ref('search'); // search, planning, results
         const loading = ref(false);
-        const searchParams = reactive({ name: '', code: '', campus: '1', semester: '2025-2026-1', match_mode: 'OR' });
+        const searchParams = reactive({ name: '', code: '', campus: '1', semester: '2025-2026-2', match_mode: 'OR' });
         const searchResults = ref([]);
         const groups = ref([]);
         const preferences = reactive({
             avoid_early_morning: false,
             avoid_weekend: false,
             compactness: 'none',
-            max_daily_load: 0,
             day_max_limit_enabled: false,
-            day_max_limit_value: 4,
+            day_max_limit_value: 0,
             day_max_limit_days: [true, true, true, true, true, true, true]
         });
 
@@ -31,7 +30,7 @@ createApp({
         const importText = ref('');
         const isImporting = ref(false);
         const importStatus = ref('');
-        const importParams = reactive({ semester: '2025-2026-1', campus: '1' });
+        const importParams = reactive({ semester: '2025-2026-2', campus: '1' });
 
         // Alternatives Modal
         const showAltModal = ref(false);
@@ -75,10 +74,10 @@ createApp({
 
         const fetchCourses = async (params) => {
             // New SPA implementation: fetch from Edge Function
-            // Endpoint: /functions/search?params...
+            // Endpoint: /search?params...
             const query = new URLSearchParams(params).toString();
             try {
-                const resp = await fetch(`/functions/search?${query}`);
+                const resp = await fetch(`/search?${query}`);
                 if (!resp.ok) {
                     const err = await resp.json();
                     throw new Error(err.error || resp.statusText);
