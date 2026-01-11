@@ -23,6 +23,7 @@ createApp({
         const totalCount = ref(0);
         const currentScheduleIdx = ref(0);
         const currentWeek = ref(1);
+        const showAllWeeks = ref(false);
         const toastRef = ref(null);
 
         // Import Modal State
@@ -141,6 +142,27 @@ createApp({
             showImportModal.value = false;
         };
 
+        const checkForDuplicates = (newCandidates) => {
+            if (!groups.value || groups.value.length === 0) return true;
+            const existingNames = new Set(groups.value.map(g => {
+                const active = g.candidates.find(c => c.selected);
+                return active ? active.name : (g.candidates[0] ? g.candidates[0].name : "");
+            }));
+
+            const duplicates = new Set();
+            for (const cand of newCandidates) {
+                if (existingNames.has(cand.name)) {
+                    duplicates.add(cand.name);
+                }
+            }
+
+            if (duplicates.size > 0) {
+                const names = Array.from(duplicates).join(", ");
+                return confirm(`检测到重复课程: [${names}] 已在现有课程组中。\n\n重复添加可能导致排课结果混乱。\n是否继续添加？`);
+            }
+            return true;
+        };
+
         const startBatchImport = async () => {
             if (!importText.value) return showToast("请粘贴内容", 'error');
             isImporting.value = true;
@@ -218,11 +240,18 @@ createApp({
                     });
 
                     if (res && res.length > 0) {
-                        // Create Group
-                         const candidates = res.map(c => ({
+                        const candidates = res.map(c => ({
                             ...c,
-                            selected: true // Auto select all for imported groups
+                            selected: true
                         }));
+
+                        // Check dupe for this specific import item
+                        if (!checkForDuplicates(candidates)) {
+                             failCount++; // User skipped
+                             continue;
+                        }
+
+                        // Create Group
                         groups.value.push({
                             id: Date.now() + i, // unique-ish id
                             open: false,
@@ -247,6 +276,11 @@ createApp({
         const createGroup = () => {
             const selectedInSearch = searchResults.value.filter(c => c.checked);
             if (selectedInSearch.length === 0) return showToast("未选择任何课程", 'error');
+
+            // Pre-check duplicates
+            if (!checkForDuplicates(selectedInSearch)) {
+                return;
+            }
 
             // Copy all search results, map checked to selected
             const candidates = searchResults.value.map(c => ({
@@ -309,18 +343,14 @@ createApp({
             const bitPos = BigInt(day * 13 + node);
             const mask = 1n << bitPos;
 
+            // 1. Try to find match in CURRENT week
             for (let c of courses) {
-                // schedule_bitmaps are strings now
                 let weekMapStr = c.schedule_bitmaps ? c.schedule_bitmaps[week] : "0";
                 if (!weekMapStr) weekMapStr = "0";
-
                 let weekMap = 0n;
-                try {
-                     weekMap = BigInt(weekMapStr);
-                } catch (e) {}
+                try { weekMap = BigInt(weekMapStr); } catch (e) {}
 
                 if ((weekMap & mask) !== 0n) {
-                    // Found the course occupying this cell
                     let loc = "未知地点";
                     if (c.sessions) {
                         const currentPeriod = node + 1;
@@ -330,27 +360,69 @@ createApp({
                             currentPeriod <= s.end &&
                             s.weeks.includes(week)
                         );
-                        if (sess) {
-                            loc = sess.location;
-                        }
+                        if (sess) loc = sess.location;
                     } else {
-                         let text = c.location_text || "";
-                         text = text.replace(/周[一二三四五六日].+?周(\((单|双)\))?/g, '').trim();
-                         text = text.replace(/^周[一二三四五六日]\s+/, '').trim();
-
-                         if (!text || text === ',') {
-                             loc = (c.location_text || "").split(' ').pop();
-                         } else {
-                             loc = text;
-                         }
+                        // Fallback parsing
+                        let text = c.location_text || "";
+                        text = text.replace(/周[一二三四五六日].+?周(\((单|双)\))?/g, '').trim();
+                        text = text.replace(/^周[一二三四五六日]\s+/, '').trim();
+                        if (!text || text === ',') {
+                            loc = (c.location_text || "").split(' ').pop();
+                        } else {
+                            loc = text;
+                        }
                     }
-
                     return {
                         name: c.name,
                         teacher: c.teacher,
                         location: loc,
-                        alternatives: c.alternatives
+                        alternatives: c.alternatives,
+                        isCurrent: true
                     };
+                }
+            }
+
+            // 2. If not found, and showAllWeeks is ON, check other weeks
+            if (showAllWeeks.value) {
+                for (let c of courses) {
+                    // Check sessions first (more accurate)
+                    if (c.sessions) {
+                        const currentPeriod = node + 1;
+                        // Find any session that covers this Day/Node, regardless of week
+                        const sess = c.sessions.find(s =>
+                            s.day === day &&
+                            currentPeriod >= s.start &&
+                            currentPeriod <= s.end
+                        );
+                        if (sess) {
+                             return {
+                                name: c.name,
+                                teacher: c.teacher,
+                                location: sess.location,
+                                alternatives: c.alternatives,
+                                isCurrent: false // Gray out
+                            };
+                        }
+                    }
+
+                    // Fallback: scan all bitmaps (heavy but necessary if no sessions)
+                    // Skip if sessions existed but didn't match (already handled above)
+                    if (!c.sessions && c.schedule_bitmaps) {
+                         for(let w=1; w<c.schedule_bitmaps.length; w++) {
+                             let wm = 0n;
+                             try { wm = BigInt(c.schedule_bitmaps[w]); } catch(e){}
+                             if ((wm & mask) !== 0n) {
+                                 // Found in some week
+                                 return {
+                                    name: c.name,
+                                    teacher: c.teacher,
+                                    location: c.location_text, // Raw text fallback
+                                    alternatives: c.alternatives,
+                                    isCurrent: false
+                                 };
+                             }
+                         }
+                    }
                 }
             }
             return null;
@@ -464,7 +536,8 @@ createApp({
             toggleSelectAll, toggleAllDays, invertDays,
             showImportModal, importText, isImporting, importStatus, importParams,
             openImportModal, closeImportModal, startBatchImport,
-            showAltModal, currentAltCourse, openAlternatives
+            showAltModal, currentAltCourse, openAlternatives,
+            showAllWeeks
         };
     }
 }).mount('#app');
