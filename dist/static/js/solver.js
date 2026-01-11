@@ -269,10 +269,59 @@ class ScheduleSolver {
         // 0. Preprocess: Filter Empty Groups & Merge
         const mergedGroupsMap = new Map();
 
-        // Use filtered groups for logic
-        const nonEmptyGroups = groups.filter(g => g.candidates && g.candidates.some(c => c.selected));
+        // Collect names of all groups the user INTENDED to schedule (before filtering invalid candidates)
+        // This ensures that if a group is completely filtered out (e.g. all candidates are 'Ghost'/Invalid),
+        // it is still counted as a "Missing Course".
+        const allRequiredNames = new Set();
+        groups.forEach(g => {
+            if (g.candidates && g.candidates.some(c => c.selected)) {
+                // Use the name of the first selected candidate, or the first candidate as fallback
+                const active = g.candidates.find(c => c.selected) || g.candidates[0];
+                if (active && active.name) {
+                    allRequiredNames.add(active.name);
+                } else {
+                    allRequiredNames.add(`__ID_${g.id}__`);
+                }
+            }
+        });
 
-        if (nonEmptyGroups.length === 0) {
+        // Helper to validate a candidate
+        const isValidCandidate = (c) => {
+            // Rule 1: Reject if location is "Free Time"
+            if ((c.location_text || "").includes("自由时间")) return false;
+
+            // Rule 2: Check Time Parsing
+            // If time cannot be parsed (bitmap is empty or all zeros), treat as invalid immediately.
+            const bmps = ScheduleSolver.parseBitmap(c.schedule_bitmaps);
+            // Check if any week has a non-zero bitmap
+            let hasTime = false;
+            for (const b of bmps) {
+                if (b > 0n) {
+                    hasTime = true;
+                    break;
+                }
+            }
+            if (!hasTime) return false;
+
+            return true;
+        };
+
+        // Filter out invalid candidates from the groups
+        // We create a shallow copy of groups to avoid mutating the input in a way that affects the UI permanently if not desired,
+        // but 'groups' passed here is usually a deep copy from app.js anyway.
+        // Let's iterate and filter candidates on the fly.
+        const cleanedGroups = groups.map(g => {
+            return {
+                ...g,
+                candidates: g.candidates.filter(c => c.selected && isValidCandidate(c))
+            };
+        });
+
+        // Use filtered groups for logic
+        // A group is 'nonEmpty' only if it still has valid, selected candidates.
+        const nonEmptyGroups = cleanedGroups.filter(g => g.candidates && g.candidates.length > 0);
+
+        if (nonEmptyGroups.length === 0 && allRequiredNames.size === 0) {
             return { schedules: [], total_found: 0 };
         }
 
@@ -385,9 +434,11 @@ class ScheduleSolver {
                     // Missing Groups
                     const presentNames = new Set(finalSchedule.map(c => c.name));
                     const missingNames = [];
-                    for(const mg of metaGroups) {
-                        if (!presentNames.has(mg.name)) {
-                            missingNames.push(mg.name);
+
+                    // Compare against ALL required names, not just the ones that made it into metaGroups
+                    for(const reqName of allRequiredNames) {
+                        if (!presentNames.has(reqName)) {
+                            missingNames.push(reqName);
                         }
                     }
 
@@ -398,7 +449,8 @@ class ScheduleSolver {
                     let score = evalResult.score;
 
                     // Apply Missing Penalty
-                    const penalty = missingCount * 10.0;
+                    // Increased penalty to ensure schedules with missing courses are ranked lower
+                    const penalty = missingCount * 500.0;
                     score -= penalty;
 
                     const entry = {
