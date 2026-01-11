@@ -463,10 +463,14 @@ class ScheduleSolver {
             let totalCredits = 0;
             let totalHours = 0;
             const weekSet = new Set();
+            const countedCourses = new Set(); // Prevent double counting credits/hours for same-named courses
 
             sched.forEach(c => {
-                 totalCredits += (c.credit || 0);
-                 totalHours += (c.hours || 0);
+                 if (!countedCourses.has(c.name)) {
+                     totalCredits += (c.credit || 0);
+                     totalHours += (c.hours || 0);
+                     countedCourses.add(c.name);
+                 }
                  if (c.sessions) {
                      c.sessions.forEach(s => s.weeks.forEach(w => weekSet.add(w)));
                  }

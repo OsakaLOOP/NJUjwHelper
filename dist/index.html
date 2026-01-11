@@ -45,7 +45,8 @@
         .timetable { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; }
         .timetable th, .timetable td { border: 1px solid #ddd; padding: 5px; text-align: center; font-size: 0.85rem; height: 40px; }
         .timetable th { background: #f9f9f9; }
-        .cell-active { background-color: #bbdefb; color: #0d47a1; font-size: 0.75rem; border-radius: 2px; height: 100%; width: 100%;}
+        .cell-active { background-color: #bbdefb; color: #0d47a1; font-size: 0.75rem; border-radius: 2px; height: 100%; width: 100%; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+        .cell-active.gray { background-color: #e0e0e0; color: #757575; opacity: 0.8; }
         .cell-conflict { background-color: #ffcdd2; color: #b71c1c; }
 
         /* Toast */
@@ -271,8 +272,13 @@
                     <div id="capture-area" style="background: white; padding: 15px; margin-top: 20px; border: 1px solid #eee;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                             <h2 style="margin:0;">第 {{ currentScheduleIdx + 1 }} 方案课表</h2>
-                            <div>
-                                周次: <input type="number" v-model.number="currentWeek" min="1" max="20" style="width: 60px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <label style="font-size: 0.9rem; cursor: pointer;">
+                                    <input type="checkbox" v-model="showAllWeeks"> 显示非本周课程
+                                </label>
+                                <div>
+                                    周次: <input type="number" v-model.number="currentWeek" min="1" max="20" style="width: 60px;">
+                                </div>
                             </div>
                         </div>
 
@@ -310,7 +316,7 @@
                                     <td>{{ node }}</td>
                                     <td v-for="day in 7" :key="day">
                                         <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1)"
-                                             class="cell-active"
+                                             :class="['cell-active', getCell(currentScheduleIdx, currentWeek, day-1, node-1).isCurrent ? '' : 'gray']"
                                              @click="openAlternatives(getCell(currentScheduleIdx, currentWeek, day-1, node-1))"
                                              style="cursor: pointer;">
                                             <div style="font-weight: bold;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).name }}</div>
