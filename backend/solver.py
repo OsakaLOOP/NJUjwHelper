@@ -244,12 +244,18 @@ class ScheduleSolver:
                 return
 
             # Pruning
-            if len(top_n_heap) == max_results:
+            # Only prune if we are sure score cannot increase.
+            # If compactness='low', score can increase (bonus for gaps).
+            can_prune = preferences.get('compactness') != 'low'
+
+            if can_prune and len(top_n_heap) == max_results:
                 partial_sched = [m['representative'] for m in current_schedule_meta]
                 partial_score = ScheduleRanker.score_schedule(partial_sched, preferences)
                 # Upper bound check (assuming score decreases with penalties)
-                # If partial score is already too low, we can't recover.
-                if partial_score < top_n_heap[0][0]:
+                # If partial score is already too low (or equal to the worst we have,
+                # and we can't improve), we can't beat the current set.
+                # Since we only replace if score > min_heap, partial <= min implies failure.
+                if partial_score <= top_n_heap[0][0]:
                     return
 
             candidates = meta_groups[group_idx]
