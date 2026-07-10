@@ -271,6 +271,7 @@ createApp({
         const currentWeek = ref(1);
         const showAllWeeks = ref(true);
         const toastRef = ref(null);
+        const visitCount = ref(null);
 
         // Selection State
         const lastSearchIdx = ref(-1);
@@ -1247,6 +1248,20 @@ createApp({
             }
         };
 
+        const fetchVisitCount = async () => {
+            try {
+                const resp = await fetch('/visit');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data && typeof data.count === 'number') {
+                        visitCount.value = data.count;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch visit count", e);
+            }
+        };
+
         const init = () => {
              const loaded = loadSession();
              if (loaded && groups.value.length > 0) {
@@ -1261,6 +1276,7 @@ createApp({
                 isDraggingGroup.value = false;
             });
             init();
+            fetchVisitCount();
         });
 
         return {
@@ -1280,7 +1296,8 @@ createApp({
             showCustomModal, customForm, openCustomModalHandler, saveCustomSchedule,
             groupedSearchResults, expandedSearchGroups, expandedGroupCandidates,
             toggleSearchGroup, toggleSearchGroupExpand, getGroupedCandidates,
-            toggleGroupCandidateSelect, toggleGroupCandidateExpand
+            toggleGroupCandidateSelect, toggleGroupCandidateExpand,
+            visitCount
         };
     }
 }).mount('#app');

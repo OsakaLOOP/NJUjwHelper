@@ -156,6 +156,9 @@
                 <span style="font-size: 0.7rem; font-weight: normal; margin-left: 15px; opacity: 0.8;">本 Web App 所有内容在用户端计算, 不存储用户密码. 所有内容仅为算法生成, 不作为完全参考.</span>
             </h1>
             <div style="display: flex; align-items: center; gap: 10px;">
+                <span v-if="visitCount !== null" style="font-size: 0.9rem; color: #666; margin-right: 5px; user-select: none;">
+                    访问人数: {{ visitCount }}
+                </span>
                 <a href="https://github.com/OsakaLOOP/NJUjwHelper" target="_blank" style="display: inline-flex; align-items: center; text-decoration: none; margin-right: 5px;">
                     <img src="https://img.shields.io/github/stars/OsakaLOOP/NJUjwHelper?style=social" alt="GitHub stars">
                 </a>
@@ -267,8 +270,8 @@
                                     <div class="course-group-card-checkbox">
                                         <input type="checkbox"
                                                :checked="g.checked"
-                                               :indeterminate="g.indeterminate"
-                                               @click.prevent.stop="toggleSearchGroup(g.id, $event)">
+                                               .indeterminate="g.indeterminate"
+                                               @click.stop="toggleSearchGroup(g.id, $event)">
                                     </div>
                                     <div class="course-group-card-title">
                                         <div class="course-group-card-title-main">
@@ -366,8 +369,8 @@
                                         <div class="course-group-card-checkbox">
                                             <input type="checkbox"
                                                    :checked="g.checked"
-                                                   :indeterminate="g.indeterminate"
-                                                   @click.prevent.stop="toggleGroupCandidateSelect(group, idx, g.id, $event)">
+                                                   .indeterminate="g.indeterminate"
+                                                   @click.stop="toggleGroupCandidateSelect(group, idx, g.id, $event)">
                                         </div>
                                         <div class="course-group-card-title">
                                             <div class="course-group-card-title-main">
