@@ -254,7 +254,7 @@ class NJUCourseClient:
         if self.toast_callback:
             self.toast_callback(msg, type)
 
-    def search(self, course_name=None, course_code=None, campus="1", semester="2025-2026-1", match_mode="OR"):
+    def search(self, course_name=None, course_code=None, campus="1", semester="2026-2027-1", match_mode="OR"):
         """
         分页拉取所有符合条件的数据
         match_mode: "OR" (任意匹配) 或 "AND" (全部匹配) - 仅对 course_name 有效
@@ -435,31 +435,52 @@ class NJUCourseClient:
 
 # ================= 主程序入口 =================
 if __name__ == "__main__":
-    print("=== NJU Course Fetcher & Bitmapper ===")
-    
-    # 1. Init client (will auto-load cookie or prompt login)
-    client = NJUCourseClient()
-    
-    # 2. 用户输入筛选条件 (留空则忽略)
-    in_name = input("课程名 (如 '微积分', 可空): ").strip()
-    in_code = input("课程号 (如 '06000030', 可空): ").strip()
-    in_camp = input("校区代码 (1=鼓楼, 2=仙林, 默认1): ").strip() or "1"
-    in_sem  = input("学期 (默认 2025-2026-1): ").strip() or "2025-2026-1"
-    
-    # 3. 执行
-    results = client.search(in_name, in_code, in_camp, in_sem)
-    
-    # 4. 结果展示 (演示二进制)
-    print(f"\n=== 结果预览 (共 {len(results)} 条) ===")
-    for idx, course in enumerate(results[:3]): # 只打印前3条防止刷屏
-        print(f"\n[{idx+1}] {course['name']} ({course['code']}) | {course['teacher']}")
-        print(f"    地点: {course['location_text']}")
-        # 演示第一周的二进制
-        week1_mask = course['schedule_bitmaps'][1]
-        print(f"    Week 1 Bitmap (String): {week1_mask}")
-        print(f"    Sessions: {course['sessions']}")
-    
-    # 5. 保存
-    with open(f"nju_courses_{in_camp}.json", "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-    print("\n完整数据已保存至 'nju_courses_final.json'")
+    import argparse
+    import sys
+    import os
+
+    parser = argparse.ArgumentParser(description="NJU Course Fetcher & Bitmapper")
+    parser.add_argument("--semester", type=str, default="2026-2027-1", help="学期，例如 2026-2027-1")
+    parser.add_argument("--campus", type=str, default=None, help="校区代码，1=鼓楼, 2=浦口, 3=仙林, 4=苏州，或使用 'all' 代表全部")
+    parser.add_argument("--output-dir", type=str, default="dist/data", help="输出文件夹路径")
+    parser.add_argument("--interactive", action="store_true", help="强制启用交互式输入模式")
+
+    # 如果没有传任何命令行参数，或者指定了 --interactive，则走交互模式
+    if len(sys.argv) == 1 or "--interactive" in sys.argv:
+        print("=== NJU Course Fetcher & Bitmapper (交互模式) ===")
+        client = NJUCourseClient()
+        in_name = input("课程名 (如 '微积分', 可空): ").strip()
+        in_code = input("课程号 (如 '06000030', 可空): ").strip()
+        in_camp = input("校区代码 (1=鼓楼, 2=浦口, 3=仙林, 4=苏州, 默认1): ").strip() or "1"
+        in_sem  = input("学期 (默认 2026-2027-1): ").strip() or "2026-2027-1"
+        
+        results = client.search(in_name, in_code, in_camp, in_sem)
+        print(f"\n=== 结果预览 (共 {len(results)} 条) ===")
+        for idx, course in enumerate(results[:3]):
+            print(f"\n[{idx+1}] {course['name']} ({course['code']}) | {course['teacher']}")
+            print(f"    地点: {course['location_text']}")
+            week1_mask = course['schedule_bitmaps'][1]
+            print(f"    Week 1 Bitmap (String): {week1_mask}")
+            print(f"    Sessions: {course['sessions']}")
+        
+        os.makedirs("dist/data", exist_ok=True)
+        out_path = f"dist/data/nju_courses_{in_camp}_{in_sem}.json"
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+        print(f"\n数据已保存至 '{out_path}'")
+    else:
+        args = parser.parse_args()
+        print(f"=== NJU Course Fetcher (批量模式: 学期={args.semester}, 校区={args.campus}) ===")
+        client = NJUCourseClient()
+        
+        campuses = ["1", "2", "3", "4"] if args.campus == "all" or args.campus is None else args.campus.split(",")
+        os.makedirs(args.output_dir, exist_ok=True)
+        
+        for camp in campuses:
+            camp = camp.strip()
+            print(f"\n[*] 开始抓取 校区 {camp} (学期 {args.semester})...")
+            results = client.search(course_name=None, course_code=None, campus=camp, semester=args.semester)
+            out_path = os.path.join(args.output_dir, f"nju_courses_{camp}_{args.semester}.json")
+            with open(out_path, "w", encoding="utf-8") as f:
+                json.dump(results, f, ensure_ascii=False, indent=2)
+            print(f"[+] 校区 {camp} 抓取并保存成功，共 {len(results)} 条数据 -> {out_path}")

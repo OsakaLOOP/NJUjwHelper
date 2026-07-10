@@ -150,13 +150,16 @@
                         {{ searchResults.length === 0 ? '未找到符合条件的课程。' : '当前筛选条件下没有课程。' }}
                     </div>
 
-                    <div class="results-list" v-else>
+                    <div class="results-list" v-else style="user-select: none;">
                         <label v-for="(course, idx) in filteredSearchResults"
                                :key="idx"
                                class="result-item"
-                               :style="(course.location_text || '').includes('自由时间') ? { opacity: 0.5, cursor: 'not-allowed' } : {}">
+                               :style="(course.location_text || '').includes('自由时间') ? { opacity: 0.5, cursor: 'not-allowed' } : {}"
+                               @click.prevent="handleSearchItemClick(idx, $event)"
+                               @mousedown="startDragSearch(idx, $event)"
+                               @mouseenter="overDragSearch(idx, $event)">
                             <input type="checkbox"
-                                   v-model="course.checked"
+                                   :checked="course.checked"
                                    :disabled="(course.location_text || '').includes('自由时间')">
                             <div>
                                 <strong>{{ course.name }}</strong> ({{ course.code }}) <br>
@@ -169,27 +172,39 @@
 
             <!-- View 2: Planning -->
             <div v-show="currentView==='planning'" class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
                     <h2>我的课程组 ({{ groups.length }})</h2>
-                    <button class="secondary" @click="openImportModal">批量导入</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="secondary" @click="openCustomModalHandler">添加自定义日程</button>
+                        <button class="secondary" @click="openImportModal">批量导入</button>
+                    </div>
                 </div>
                 <div v-if="groups.length === 0">暂无课程组，请先去搜索添加或批量导入。</div>
 
                 <div v-for="(group, idx) in groups" :key="group.id" class="group-item">
                     <div class="group-header" @click="group.open = !group.open">
                         <span>
-                            <strong>组 {{ idx + 1 }}:</strong> {{ getGroupName(group) }}
-                            <small>({{ getActiveCount(group) }}/{{ group.candidates.length }} 选中)</small>
+                            <strong>组 {{ idx + 1 }}:</strong> 
+                            <span v-if="group.is_custom" style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; margin-right: 6px;" :style="{ backgroundColor: group.candidates[0].color }"></span>
+                            {{ getGroupName(group) }}
+                            <small v-if="!group.is_custom">({{ getActiveCount(group) }}/{{ group.candidates.length }} 选中)</small>
+                            <small v-else>(自定义日程)</small>
                         </span>
                         <button class="danger" @click.stop="removeGroup(idx)" style="padding: 4px 8px; font-size: 0.8rem;">删除</button>
                     </div>
-                    <div :class="['group-body', group.open ? 'open' : '']">
-                        <label v-for="(course, cIdx) in group.candidates" :key="cIdx" class="result-item">
+                    <div :class="['group-body', group.open ? 'open' : '']" style="user-select: none;">
+                        <label v-for="(course, cIdx) in group.candidates"
+                               :key="cIdx"
+                               class="result-item"
+                               @click.prevent="handleGroupItemClick(idx, cIdx, $event)"
+                               @mousedown="startDragGroup(idx, cIdx, $event)"
+                               @mouseenter="overDragGroup(idx, cIdx, $event)">
                             <input type="checkbox"
-                                   v-model="course.selected">
+                                   :checked="course.selected">
                             <div>
                                 {{ course.name }} - {{ course.teacher }} <br>
                                 <small>{{ course.location_text }}</small>
+                                <small v-if="course.comment" style="color: #666; display: block; font-style: italic;">备注: {{ course.comment }}</small>
                             </div>
                         </label>
                     </div>
@@ -295,11 +310,16 @@
                                     <td v-for="day in 7" :key="day">
                                         <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1)"
                                              class="cell-active"
+                                             :style="{ backgroundColor: getCell(currentScheduleIdx, currentWeek, day-1, node-1).color || '', color: getCell(currentScheduleIdx, currentWeek, day-1, node-1).textColor || '' }"
                                              @click="openAlternatives(getCell(currentScheduleIdx, currentWeek, day-1, node-1))"
                                              style="cursor: pointer;">
                                             <div style="font-weight: bold;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).name }}</div>
                                             <div style="font-size: 0.8em;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).teacher }}</div>
                                             <div style="font-size: 0.8em;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).location }}</div>
+                                            <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1).comment"
+                                                 style="font-size: 0.75em; font-style: italic; opacity: 0.8; margin-top: 2px;">
+                                                {{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).comment }}
+                                            </div>
                                             <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives && getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives.length > 1"
                                                  style="background: #1976d2; color: white; border-radius: 10px; padding: 0 4px; font-size: 0.7em; display: inline-block; margin-top: 2px;">
                                                 +{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives.length - 1 }}
@@ -344,7 +364,7 @@
                 <div style="display: flex; gap: 10px;">
                     <div style="flex: 1;">
                         <label>学期</label>
-                        <input v-model="importParams.semester" placeholder="2025-2026-2">
+                        <input v-model="importParams.semester" placeholder="2026-2027-1">
                     </div>
                     <div style="flex: 1;">
                         <label>校区</label>
@@ -364,6 +384,46 @@
                 <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
                     <button class="secondary" @click="closeImportModal" :disabled="isImporting">取消</button>
                     <button @click="startBatchImport" :disabled="isImporting">{{ isImporting ? '导入中...' : '开始导入' }}</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Schedule Modal -->
+        <div v-if="showCustomModal" style="position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000;">
+            <div style="background: white; padding: 20px; border-radius: 8px; width: 500px; max-width: 90%; display: flex; flex-direction: column; gap: 15px;">
+                <h3 style="margin-top: 0;">添加自定义日程</h3>
+                
+                <div>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">日程名称</label>
+                    <input v-model="customForm.name" placeholder="例如：社团活动 / 托福备考" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+
+                <div>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">时间安排 (支持文字解析)</label>
+                    <input v-model="customForm.timeText" placeholder="例如：周一 1-2节 1-16周" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <div style="font-size: 0.8em; color: #666; margin-top: 5px; line-height: 1.4;">
+                        提示：格式需为 <strong>周X 开始节-结束节节 选中周周</strong>。<br>
+                        支持逗号分隔多个时间段，也支持单双周说明。<br>
+                        例如：<code>周一 1-2节 1-16周, 周三 3-4节 1-16周(单)</code>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">注释备注 (选填)</label>
+                    <input v-model="customForm.comment" placeholder="例如：在报告厅 / 记得带课本" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+
+                <div>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">背景颜色</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="color" v-model="customForm.color" style="width: 50px; height: 35px; padding: 0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">
+                        <span style="font-size: 0.9em; color: #555;">将在生成的课表中以此颜色显示</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                    <button class="secondary" @click="showCustomModal = false">取消</button>
+                    <button @click="saveCustomSchedule">保存</button>
                 </div>
             </div>
         </div>

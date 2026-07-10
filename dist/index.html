@@ -18,15 +18,15 @@
         button.secondary { background: #ccc; }
         button.danger { background: #b00020; color: white; }
         .card { min-height: 500px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
-
+        
         /* Navigation */
-        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; justify-content: space-between; width: 90%; z-index: 50;position: relative;}
+        .nav-tabs { width:100vw; display: flex; gap: 10px; margin-bottom: 20px; justify-content: space-between; width: 90%; z-index: 50;position: relative;}
         .nav-tab { padding: 10px 20px; background: #ddd; border-radius: 0 0 8px 8px; transition: background 0.2s, transform 0.1s; cursor: pointer; z-index: 50;position: relative;}
         .nav-tab.active { background: #630560; color: white; }
         .nav-tab:hover:not(.active) {
-    background: #e0e0e0;
-    transform: translateY(-2px);
-}
+            background: #e0e0e0;
+            transform: translateY(-2px);
+        }
 
         /* Search */
         .search-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 10px; }
@@ -37,15 +37,14 @@
 
         /* Groups */
         .group-item { border: 1px solid #ddd; margin-bottom: 10px; border-radius: 4px; overflow: hidden; }
-        .group-header { background: #f0f0f0; padding: 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-        .group-body { padding: 10px; display: none; }
-        .group-body.open { display: block; }
+        .group-header { background: #f0f0f0; padding: 10px; display: flex; justify-content: space-between; align-items: center; cursor: default; }
+        .group-body { padding: 10px; display: block; }
 
         /* Timetable */
         .timetable { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; }
         .timetable th, .timetable td { border: 1px solid #ddd; padding: 5px; text-align: center; font-size: 0.85rem; height: 40px; }
         .timetable th { background: #f9f9f9; }
-        .cell-active { background-color: #bbdefb; color: #0d47a1; font-size: 0.75rem; border-radius: 2px; height: 100%; width: 100%; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+        .cell-active { background-color: #bbdefb; color: #0d47a1; font-size: 0.75rem; border-radius: 2px; height: 100%; width: 100%; display: flex; flex-direction: column; justify-content: center; overflow: hidden; position: relative; }
         .cell-active.gray { background-color: #e0e0e0; color: #757575; opacity: 0.8; }
         .cell-active.skippable { background-color: #c8e6c9; color: #2e7d32; }
         .cell-conflict { background-color: #ffcdd2; color: #b71c1c; }
@@ -70,9 +69,82 @@
         }
         .result-item { user-select: none; -webkit-user-select: none; } /* Disable text selection for drag */
 
+        /* Collapsible Card Design */
+        .course-group-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+        .course-group-card:hover {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+            border-color: #630560;
+        }
+        .course-group-card-header {
+            display: flex;
+            align-items: center;
+            padding: 10px 14px;
+            background: #fafafa;
+            cursor: pointer;
+            user-select: none;
+        }
+        .course-group-card-checkbox {
+            display: flex;
+            align-items: center;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        .course-group-card-checkbox input[type="checkbox"] {
+            margin: 0;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .course-group-card-title {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .course-group-card-title-main {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+        .course-group-card-title-main strong {
+            font-size: 0.95rem;
+            color: #333;
+        }
+        .course-group-card-title-main small {
+            font-size: 0.8rem;
+            color: #666;
+            font-family: monospace;
+        }
+        .course-group-card-summary {
+            font-size: 0.8rem;
+            color: #777;
+        }
+        .course-group-card-arrow {
+            margin-left: 12px;
+            font-size: 0.9rem;
+            color: #888;
+            transition: transform 0.2s ease;
+            display: inline-block;
+        }
+        .course-group-card-arrow.expanded {
+            transform: rotate(90deg);
+        }
+        .course-group-card-body {
+            border-top: 1px solid #eee;
+            background: #fff;
+        }
+
         /* Sticky Headers */
         header { position: sticky; top: 0; }
-        .nav-tabs { position: sticky; top: 55px; background: #f5f5f5; padding-top: 10px; margin-top: -10px; } /* Adjust top based on header height ~55px */
+        .nav-tabs { position: sticky; top: 55px; background: linear-gradient(to right, rgba(245, 245, 245, 0.7), #f5f5f5); padding-top: 10px; margin-top: -10px; } /* Adjust top based on header height ~55px */
     </style>
 </head>
 <body>
@@ -83,29 +155,32 @@
                 <span v-if="groups.length > 0" style="font-size: 0.8em; margin-left: 10px; font-weight: normal;">当前组数: {{ groups.length }}</span>
                 <span style="font-size: 0.7rem; font-weight: normal; margin-left: 15px; opacity: 0.8;">本 Web App 所有内容在用户端计算, 不存储用户密码. 所有内容仅为算法生成, 不作为完全参考.</span>
             </h1>
-            <div>
-                <button @click="saveSession" class="secondary" style="margin-right: 10px;">保存进度</button>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <a href="https://github.com/OsakaLOOP/NJUjwHelper" target="_blank" style="display: inline-flex; align-items: center; text-decoration: none; margin-right: 5px;">
+                    <img src="https://img.shields.io/github/stars/OsakaLOOP/NJUjwHelper?style=social" alt="GitHub stars">
+                </a>
+                <button @click="saveSession" class="secondary">保存进度</button>
                 <button @click="newSession" class="danger">重置</button>
             </div>
         </header>
         <div class="nav-tabs" >
             <div style="display: flex; gap: 10px;">
-            <div :class="['nav-tab', currentView==='search'?'active':'']" @click="currentView='search'">1. 课程查询</div>
-            <div :class="['nav-tab', currentView==='planning'?'active':'']" @click="currentView='planning'">2. 规划 & 策略</div>
-            <div :class="['nav-tab', currentView==='results'?'active':'']" @click="currentView='results'">3. 结果 & 课表</div>
+                <div :class="['nav-tab', currentView==='search'?'active':'']" @click="currentView='search'">1. 课程查询</div>
+                <div :class="['nav-tab', currentView==='planning'?'active':'']" @click="currentView='planning'">2. 规划 & 策略</div>
+                <div :class="['nav-tab', currentView==='results'?'active':'']" @click="currentView='results'">3. 结果 & 课表</div>
             </div>
             <div style="display: flex; align-items: center;">
-            <div style="display: flex; align-items: baseline; font-size: 1rem; color: #888; font-family: 'Consolas', 'Monaco', monospace; letter-spacing: -0.02em;">
-                <span style="display: inline-block; transform: scaleX(-1); margin-right: 5px; font-size: 1.1em;" aria-label="Copyleft icon">&copy;</span>
-                <span>
-                    <a href="https://github.com/OsakaLOOP" target="_blank" style="color: inherit; text-decoration: none; border-bottom: 1px solid #eee;">@OsakaLOOP</a>
-                    <span style="margin: 0 8px; opacity: 0.4;">|</span>
-                    Licensed under
-                    <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" style="color: #630560; text-decoration: none; font-weight: 600;">GPL v3.0</a>
-                    <span style="margin: 0 8px; opacity: 0.4;">|</span>
-                    数据源: <a href="https://jw.nju.edu.cn" target="_blank" style="color: #630560; text-decoration: none; font-weight: 600;">南大教服平台 - 全校课程表</a> 最后爬取: 2026-01-10
-                </span>
-            </div>
+                <div style="display: flex; align-items: baseline; font-size: 1rem; color: #888; font-family: 'Consolas', 'Monaco', monospace; letter-spacing: -0.02em;">
+                    <span style="display: inline-block; transform: scaleX(-1); margin-right: 5px; font-size: 1.1em;" aria-label="Copyleft icon">&copy;</span>
+                    <span>
+                        <a href="https://github.com/OsakaLOOP" target="_blank" style="color: inherit; text-decoration: none; border-bottom: 1px solid #eee;">@OsakaLOOP</a>
+                        <span style="margin: 0 8px; opacity: 0.4;">|</span>
+                        Licensed under
+                        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" style="color: inherit; text-decoration: none; font-weight: 600;">GPL v3.0</a>
+                        <span style="margin: 0 8px; opacity: 0.4;">|</span>
+                        数据源: <a href="https://jw.nju.edu.cn" target="_blank" style="color: #630560; text-decoration: none; font-weight: 600;">南大教服平台 - 全校课程表</a> 最后爬取: 2026-07-10
+                    </span>
+                </div>
             </div>
         </div>
         <div class="container">
@@ -113,9 +188,11 @@
 
             <!-- View 1: Search -->
             <div v-show="currentView==='search'" class="card">
-                <h2>添加备选课程组</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>添加备选课程组</h2><button class="secondary" @click="openImportModal" style="flex-shrink: 0; white-space: nowrap; box-sizing: border-box; margin-left: 5px; color:#e1effd; background-color:#1976d2;">批量导入</button>
+                </div>
                 <div style="height: 10px;"></div>
-                <div class="search-grid" style="display: flex; width: 100%; gap: 5; align-items: stretch;">
+                <div class="search-grid" style="display: flex; flex-wrap: wrap; width: 100%; gap: 5; align-items: stretch;">
                     <input
                         v-model="searchParams.name"
                         placeholder="课程名 (空格分隔多词)"
@@ -160,12 +237,13 @@
                         {{ loading ? '...' : '搜索' }}
                     </button>
 
-                    <button class="secondary" @click="openImportModal" style="flex-shrink: 0; white-space: nowrap; box-sizing: border-box; margin-left: 5px; color:#cbe5ff; background-color:#1976d2;">批量导入</button>
+                    
                 </div>
 
                 <div v-if="hasSearched">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
                         <h3>搜索结果 ({{ filteredSearchResults.length }})</h3>
+                        <span style="font-size: 0.9rem; color: #666;">提示: PC端按住Shift或移动端拖拽可进行多选; 排课规划时，将要求每个课程组中至少满足一门课程。</span>
                         <button @click="createGroup">将选中项存为一组</button>
                     </div>
 
@@ -178,68 +256,178 @@
                         {{ searchResults.length === 0 ? '未找到符合条件的课程。' : '当前筛选条件下没有课程。' }}
                     </div>
 
-                    <div class="results-list" v-else
+                    <div class="results-list" v-else style="user-select: none;"
                          @touchmove="touchManager.move"
                          @touchend="touchManager.end">
-                        <label v-for="(course, idx) in filteredSearchResults"
-                               :key="idx"
-                               :class="['result-item', (touchState.dragging && touchState.listType==='search' && touchState.startIndex===idx) ? 'drag-selecting' : '']"
-                               :data-index="idx"
-                               @click.prevent="handleSearchItemClick(idx, $event)"
-                               @touchstart="touchManager.start($event, 'search', idx)"
-                               :style="(course.location_text || '').includes('自由时间') ? { opacity: 0.5, cursor: 'not-allowed' } : {}">
-                            <input type="checkbox"
-                                   :checked="course.checked"
-                                   :disabled="(course.location_text || '').includes('自由时间')"
-                                   style="pointer-events: none;">
-                            <div>
-                                <strong>{{ course.name }}</strong> ({{ course.code }}) <br>
-                                <small>老师: {{ course.teacher }} | 地点: {{ course.location_text }}</small>
+                        <template v-for="g in groupedSearchResults" :key="g.id">
+                            <!-- Case A: Multiple sections, display as a collapsible card -->
+                            <div v-if="g.courses.length > 1" class="course-group-card" :class="{ 'is-expanded': g.expanded }">
+                                <div class="course-group-card-header" @click="toggleSearchGroupExpand(g.id)">
+                                    <span class="course-group-card-arrow" :class="{ expanded: g.expanded }" style="margin-right: 8px;">▶</span>
+                                    <div class="course-group-card-checkbox">
+                                        <input type="checkbox"
+                                               :checked="g.checked"
+                                               :indeterminate="g.indeterminate"
+                                               @click.prevent.stop="toggleSearchGroup(g.id, $event)">
+                                    </div>
+                                    <div class="course-group-card-title">
+                                        <div class="course-group-card-title-main">
+                                            <strong>{{ g.name }}</strong>
+                                            <small>({{ g.code }})</small>
+                                        </div>
+                                        <div class="course-group-card-summary">
+                                            {{ g.pairsSummary }} ({{ g.courses.length }}门)
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="course-group-card-body" v-show="g.expanded">
+                                    <label v-for="course in g.courses"
+                                           :key="course._originalIndex"
+                                           :class="['result-item', (touchState.dragging && touchState.listType==='search' && touchState.startIndex===course._originalIndex) ? 'drag-selecting' : '']"
+                                           :data-index="course._originalIndex"
+                                           @click.prevent="handleSearchItemClick(course._originalIndex, $event)"
+                                           @touchstart="touchManager.start($event, 'search', course._originalIndex)"
+                                           :style="(course.location_text || '').includes('自由时间') ? { opacity: 0.5, cursor: 'not-allowed' } : {}">
+                                        <input type="checkbox"
+                                               :checked="course.checked"
+                                               :disabled="(course.location_text || '').includes('自由时间')"
+                                               style="pointer-events: none;">
+                                        <div>
+                                            <strong>{{ course.name }}</strong> ({{ course.code }}) <br>
+                                            <small>老师: {{ course.teacher }} | 地点: {{ course.location_text }}</small>
+                                        </div>
+                                    </label>
+                                </div>
                             </div>
-                        </label>
+                            <!-- Case B: Only one section, display as flat label -->
+                            <label v-else
+                                   :class="['result-item', (touchState.dragging && touchState.listType==='search' && touchState.startIndex===g.courses[0]._originalIndex) ? 'drag-selecting' : '']"
+                                   :data-index="g.courses[0]._originalIndex"
+                                   @click.prevent="toggleSearchGroup(g.id, $event)"
+                                   @touchstart="touchManager.start($event, 'search', g.courses[0]._originalIndex)"
+                                   :style="(g.courses[0].location_text || '').includes('自由时间') ? { opacity: 0.5, cursor: 'not-allowed' } : {}">
+                                <input type="checkbox"
+                                       :checked="g.courses[0].checked"
+                                       :disabled="(g.courses[0].location_text || '').includes('自由时间')"
+                                       style="pointer-events: none;">
+                                <div>
+                                    <strong>{{ g.courses[0].name }}</strong> ({{ g.courses[0].code }}) <br>
+                                    <small>老师: {{ g.courses[0].teacher }} | 地点: {{ g.courses[0].location_text }}</small>
+                                </div>
+                            </label>
+                        </template>
                     </div>
                 </div>
             </div>
 
             <!-- View 2: Planning -->
             <div v-show="currentView==='planning'" class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
                     <h2>我的课程组 ({{ groups.length }})</h2>
-                    <!-- Imported moved to View 1 -->
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span style="font-size: 0.9rem; color: #666; margin-right: 5px;">提示: PC端按住Shift或移动端拖拽可进行多选; 是否可逃仅影响分数机制, 对应课程仍将出现在课程表中</span>
+                        <button class="secondary" @click="openCustomModalHandler" style="flex-shrink: 0; white-space: nowrap; box-sizing: border-box; color:#cbe5ff; background-color:#1976d2; font-size: 0.9rem;">添加自定义日程</button>
+                    </div>
                 </div>
                 <div style="height: 10px;"></div>
                 <div v-if="groups.length === 0">暂无课程组，请先去搜索添加或批量导入。</div>
 
                 <div v-for="(group, idx) in groups" :key="group.id" class="group-item">
-                    <div class="group-header" @click="group.open = !group.open">
+                    <div class="group-header">
                         <span>
-                            <strong>组 {{ idx + 1 }}:</strong> {{ getGroupName(group) }}
-                            <small>({{ getActiveCount(group) }}/{{ group.candidates.length }} 选中)</small>
+                            <strong>组 {{ idx + 1 }}:</strong> 
+                            <span v-if="group.is_custom" style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; margin-right: 6px;" :style="{ backgroundColor: group.candidates[0].color }"></span>
+                            {{ getGroupName(group) }}
+                            <small v-if="!group.is_custom">({{ getActiveCount(group) }}/{{ group.candidates.length }} 选中)</small>
+                            <small v-else>(自定义日程)</small>
                         </span>
                         <div style="display: flex; align-items: center; gap: 10px;" @click.stop>
-                            <label style="font-size: 0.85rem; cursor: pointer; display: flex; align-items: center;">
-                                <input type="checkbox" v-model="group.is_skippable" style="margin-right: 4px;">
+                            <label style="font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; user-select: none;">
+                                <input type="checkbox" v-model="group.is_skippable" style="display: none;">
+                                <span style="display: inline-flex; align-items: center; margin-right: 4px; transition: transform 0.2s ease, opacity 0.2s ease;" :style="{ opacity: group.is_skippable ? 1 : 0.35, color: '#1976d2', transform: group.is_skippable ? 'scale(1.1)' : 'scale(1)' }" title="是否可逃">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                                    </svg>
+                                </span>
                                 是否可逃
                             </label>
                             <button class="danger" @click="removeGroup(idx)" style="padding: 4px 8px; font-size: 0.8rem;">删除</button>
                         </div>
                     </div>
-                    <div :class="['group-body', group.open ? 'open' : '']"
+                    <div class="group-body open" style="user-select: none;"
                          @touchmove="touchManager.move"
                          @touchend="touchManager.end">
-                        <label v-for="(course, cIdx) in group.candidates" :key="cIdx"
-                               :class="['result-item', (touchState.dragging && touchState.listType==='group' && touchState.groupIdx===idx && touchState.startIndex===cIdx) ? 'drag-selecting' : '']"
-                               :data-index="cIdx"
-                               @click.prevent="handleGroupItemClick(idx, cIdx, $event)"
-                               @touchstart="touchManager.start($event, 'group', cIdx, idx)">
-                            <input type="checkbox"
-                                   :checked="course.selected"
-                                   style="pointer-events: none;">
-                            <div>
-                                {{ course.name }} - {{ course.teacher }} <br>
-                                <small>{{ course.location_text }}</small>
-                            </div>
-                        </label>
+                        <template v-if="!group.is_custom">
+                            <template v-for="g in getGroupedCandidates(group, idx)" :key="g.id">
+                                <!-- Case A: Multiple sections, display as a collapsible card -->
+                                <div v-if="g.courses.length > 1" class="course-group-card" :class="{ 'is-expanded': g.expanded }">
+                                    <div class="course-group-card-header" @click="toggleGroupCandidateExpand(g.id)">
+                                        <span class="course-group-card-arrow" :class="{ expanded: g.expanded }" style="margin-right: 8px;">▶</span>
+                                        <div class="course-group-card-checkbox">
+                                            <input type="checkbox"
+                                                   :checked="g.checked"
+                                                   :indeterminate="g.indeterminate"
+                                                   @click.prevent.stop="toggleGroupCandidateSelect(group, idx, g.id, $event)">
+                                        </div>
+                                        <div class="course-group-card-title">
+                                            <div class="course-group-card-title-main">
+                                                <strong>{{ g.name }}</strong>
+                                                <small>({{ g.code }})</small>
+                                            </div>
+                                            <div class="course-group-card-summary">
+                                                {{ g.pairsSummary }} ({{ g.courses.length }}门)
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="course-group-card-body" v-show="g.expanded">
+                                        <label v-for="course in g.courses"
+                                               :key="course._originalIndex"
+                                               :class="['result-item', (touchState.dragging && touchState.listType==='group' && touchState.groupIdx===idx && touchState.startIndex===course._originalIndex) ? 'drag-selecting' : '']"
+                                               :data-index="course._originalIndex"
+                                               @click.prevent="handleGroupItemClick(idx, course._originalIndex, $event)"
+                                               @touchstart="touchManager.start($event, 'group', course._originalIndex, idx)">
+                                            <input type="checkbox"
+                                                   :checked="course.selected"
+                                                   style="pointer-events: none;">
+                                            <div>
+                                                {{ course.name }} - {{ course.teacher }} <br>
+                                                <small>{{ course.location_text }}</small>
+                                                <small v-if="course.comment" style="color: #666; display: block; font-style: italic;">备注: {{ course.comment }}</small>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <!-- Case B: Only one section, display as flat label -->
+                                <label v-else
+                                       :class="['result-item', (touchState.dragging && touchState.listType==='group' && touchState.groupIdx===idx && touchState.startIndex===g.courses[0]._originalIndex) ? 'drag-selecting' : '']"
+                                       :data-index="g.courses[0]._originalIndex"
+                                       @click.prevent="toggleGroupCandidateSelect(group, idx, g.id, $event)"
+                                       @touchstart="touchManager.start($event, 'group', g.courses[0]._originalIndex, idx)">
+                                    <input type="checkbox"
+                                           :checked="g.courses[0].selected"
+                                           style="pointer-events: none;">
+                                    <div>
+                                        {{ g.courses[0].name }} - {{ g.courses[0].teacher }} <br>
+                                        <small>{{ g.courses[0].location_text }}</small>
+                                        <small v-if="g.courses[0].comment" style="color: #666; display: block; font-style: italic;">备注: {{ g.courses[0].comment }}</small>
+                                    </div>
+                                </label>
+                            </template>
+                        </template>
+                        <template v-else>
+                            <label v-for="(course, cIdx) in group.candidates" :key="cIdx"
+                                   class="result-item"
+                                   @click.prevent="handleGroupItemClick(idx, cIdx, $event)">
+                                <input type="checkbox"
+                                       :checked="course.selected"
+                                       style="pointer-events: none;">
+                                <div>
+                                    {{ course.name }} - {{ course.teacher }} <br>
+                                    <small>{{ course.location_text }}</small>
+                                    <small v-if="course.comment" style="color: #666; display: block; font-style: italic;">备注: {{ course.comment }}</small>
+                                </div>
+                            </label>
+                        </template>
                     </div>
                 </div>
 
@@ -247,6 +435,7 @@
                 <label><input type="checkbox" v-model="preferences.avoid_early_morning"> 避开早八 (1-2节)</label> <br>
                 <label><input type="checkbox" v-model="preferences.quality_sleep"> 优质睡眠 (9-13节)</label> <br>
                 <label><input type="checkbox" v-model="preferences.avoid_weekend"> 避开周末</label> <br>
+                <label><input type="checkbox" v-model="preferences.compact_half_day"> 集中半天 (每天尽可能纯上午, 或纯下午+晚上)</label> <br>
                 <div style="margin-top: 10px;">
                     课程分布:
                     <select v-model="preferences.compactness">
@@ -353,12 +542,25 @@
                                     <td>{{ node }}</td>
                                     <td v-for="day in 7" :key="day">
                                         <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1)"
-                                             :class="['cell-active', getCell(currentScheduleIdx, currentWeek, day-1, node-1).isCurrent ? '' : 'gray', getCell(currentScheduleIdx, currentWeek, day-1, node-1).is_skippable ? 'skippable' : '']"
+                                             :class="['cell-active', getCell(currentScheduleIdx, currentWeek, day-1, node-1).isCurrent ? '' : 'gray']"
+                                             :style="{ backgroundColor: getCell(currentScheduleIdx, currentWeek, day-1, node-1).color || '', color: getCell(currentScheduleIdx, currentWeek, day-1, node-1).textColor || '', position: 'relative' }"
                                              @click="openAlternatives(getCell(currentScheduleIdx, currentWeek, day-1, node-1))"
                                              style="cursor: pointer;">
+                                            <!-- Blue water drop overlay for skippable courses -->
+                                            <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1).is_skippable"
+                                                 style="position: absolute; top: 4px; right: 4px; color: #1976d2; display: inline-flex; align-items: center; justify-content: center; filter: drop-shadow(0px 1px 1px rgba(255,255,255,0.8));"
+                                                 title="该课程可逃">
+                                                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
+                                                    <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                                                </svg>
+                                            </div>
                                             <div style="font-weight: bold;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).name }}</div>
                                             <div style="font-size: 0.8em;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).teacher }}</div>
                                             <div style="font-size: 0.8em;">{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).location }}</div>
+                                            <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1).comment"
+                                                 style="font-size: 0.75em; font-style: italic; opacity: 0.8; margin-top: 2px;">
+                                                {{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).comment }}
+                                            </div>
                                             <div v-if="getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives && getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives.length > 1"
                                                  style="background: #1976d2; color: white; border-radius: 10px; padding: 0 4px; font-size: 0.7em; display: inline-block; margin-top: 2px;" width="min">
                                                 可选老师+{{ getCell(currentScheduleIdx, currentWeek, day-1, node-1).alternatives.length - 1 }}
@@ -371,6 +573,26 @@
                     </div>
                     <button @click="downloadImage" style="margin-top: 20px;">保存为图片</button>
                 </div>
+            </div>
+
+            <!-- Version Update Log -->
+            <div style="margin-top: 25px; padding: 15px; background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 0.85rem; color: #555;">
+                <h4 style="margin-top: 0; color: #630560; font-size: 1rem; border-bottom: 1px solid #eee; padding-bottom: 6px;">更新记录 (v1.1)</h4>
+                <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
+                    <li><strong>v1.1 (当前版本)</strong>: 
+                        <ul>
+                            <li>新增“集中半天”排课偏好选项</li>
+                            <li>新增自定义日程，可添加非课程安排</li>
+                            <li>优化课程列表展示，可自动折叠为卡片。</li>
+                            <li>爬取了新学期数据</li>
+                        </ul>
+                    </li>
+                    <li><strong>v1.0</strong>:
+                        <ul>
+                            <li>引入基于节次掩码的排课算法</li>
+                        </ul>
+                    </li>
+                </ul>
             </div>
         </div>
 
@@ -397,13 +619,13 @@
         <div v-if="showImportModal" style="position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000;">
             <div style="background: white; padding: 20px; border-radius: 8px; width: 600px; max-width: 90%; display: flex; flex-direction: column; gap: 10px;">
                 <h3>批量导入课程</h3>
-                <p style="font-size: 0.9em; color: #666;">请粘贴来自<a href="https://ehallapp.nju.edu.cn/jwapp/sys/qxfacx/*default/index.do" target="_blank">"学期培养方案"-查看详情-切换学年模式-第x学期</a>的完整表格内容</br>或者至少每行要有课程号、课程名</br><span style="color: crimson;">请务必检查课程组内选中是否都为所需, 否则导致规划错误.</span></p>
+                <p style="font-size: 0.9em; color: #666;">请粘贴来自<a href="https://ehallapp.nju.edu.cn/jwapp/sys/qxfacx/*default/index.do" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">"学期培养方案"-查看详情-切换学年模式-第x学期</a>的完整表格内容</br>或者至少每行要有课程号、课程名</br><span style="color: crimson;">请务必检查课程组内选中是否都为所需, 否则导致规划错误.</span></p>
                 <textarea v-model="importText" rows="10" placeholder="粘贴内容到此处..." style="width: 100%; box-sizing: border-box;"></textarea>
 
                 <div style="display: flex; gap: 10px;">
                     <div style="flex: 1;">
                         <label>学期</label>
-                        <input v-model="importParams.semester" placeholder="2025-2026-2">
+                        <input v-model="importParams.semester" placeholder="2026-2027-1">
                     </div>
                     <div style="flex: 1;">
                         <label>校区</label>
@@ -423,6 +645,44 @@
                 <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
                     <button class="secondary" @click="closeImportModal" :disabled="isImporting">取消</button>
                     <button @click="startBatchImport" :disabled="isImporting">{{ isImporting ? '导入中...' : '开始导入' }}</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Schedule Modal -->
+        <div v-if="showCustomModal" style="position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000; color: #333;">
+            <div style="background: white; padding: 20px; border-radius: 8px; width: 500px; max-width: 90%; display: flex; flex-direction: column; gap: 15px; text-align: left;">
+                <h3 style="margin-top: 0;">添加自定义日程</h3>
+                
+                <div>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">日程名称</label>
+                    <input v-model="customForm.name" placeholder="例如：打舞萌" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+
+                <div>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">时间安排 (支持解析)</label>
+                    <input v-model="customForm.timeText" placeholder="例如：周一 1-2节 1-16周" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <div style="font-size: 0.8em; color: #666; margin-top: 5px; line-height: 1.4;">
+                        例如：<code>周一 1-2节 1-16周, 周三 3-4节 1-16周(单)</code>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">注释备注 (选填)</label>
+                    <input v-model="customForm.comment" placeholder="例如：在jmx/记得戴手套" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+
+                <div>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px;">背景颜色</label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="color" v-model="customForm.color" style="width: 50px; height: 35px; padding: 0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">
+                        <span style="font-size: 0.9em; color: #555;">将在生成的课表中以此颜色显示</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                    <button class="secondary" @click="showCustomModal = false" style="background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1;">取消</button>
+                    <button @click="saveCustomSchedule" style="background-color: #1976d2; color: #fff;">保存</button>
                 </div>
             </div>
         </div>

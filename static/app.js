@@ -4,9 +4,21 @@ createApp({
     setup() {
         const currentView = ref('search'); // search, planning, results
         const loading = ref(false);
-        const searchParams = reactive({ name: '', code: '', campus: '1', semester: '2025-2026-2', match_mode: 'OR' });
+        const searchParams = reactive({ name: '', code: '', campus: '1', semester: '2026-2027-1', match_mode: 'OR' });
         const searchResults = ref([]);
         const groups = ref([]);
+
+        const lastSearchIdx = ref(-1);
+        const lastGroupSelections = reactive({});
+
+        const isDraggingSearch = ref(false);
+        const dragStartSearchIdx = ref(-1);
+        const dragTargetStateSearch = ref(false);
+
+        const isDraggingGroup = ref(false);
+        const dragStartGroupIdx = ref(-1);
+        const dragStartGroupCIdx = ref(-1);
+        const dragTargetStateGroup = ref(false);
         const preferences = reactive({
             avoid_early_morning: false,
             avoid_weekend: false,
@@ -31,11 +43,172 @@ createApp({
         const importText = ref('');
         const isImporting = ref(false);
         const importStatus = ref('');
-        const importParams = reactive({ semester: '2025-2026-1', campus: '1' });
+        const importParams = reactive({ semester: '2026-2027-1', campus: '1' });
 
         // Alternatives Modal
         const showAltModal = ref(false);
         const currentAltCourse = ref(null);
+
+        // Custom Schedule States
+        const showCustomModal = ref(false);
+        const customForm = reactive({
+            name: '',
+            timeText: '',
+            comment: '',
+            color: '#4f46e5'
+        });
+
+        const WEEKDAY_MAP = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6, "天": 6};
+
+        const parseWeekRanges = (weekStr) => {
+            const weeks = new Set();
+            const parts = weekStr.split(',');
+            for (const part of parts) {
+                if (part.includes('-')) {
+                    try {
+                        const [s, e] = part.split('-').map(Number);
+                        for (let w = s; w <= e; w++) {
+                            weeks.add(w);
+                        }
+                    } catch (e) {}
+                } else {
+                    try {
+                        const w = parseInt(part);
+                        if (!isNaN(w)) weeks.add(w);
+                    } catch (e) {}
+                }
+            }
+            return Array.from(weeks).sort((a, b) => a - b);
+        };
+
+        const generateBitmap = (locationText, maxWeeks = 25) => {
+            const semesterSchedule = Array(maxWeeks + 1).fill(0n);
+            const sessions = [];
+            if (!locationText) {
+                return {
+                    bitmaps: semesterSchedule.map(x => x.toString()),
+                    sessions
+                };
+            }
+
+            const regex = /周([一二三四五六日天])\s*(\d+)-(\d+)节\s*([0-9,-]+)周/g;
+            const segments = locationText.split(/[,;]/);
+
+            for (const seg of segments) {
+                const isOddOnly = seg.includes("(单)");
+                const isEvenOnly = seg.includes("(双)");
+                
+                let locationPart = seg;
+                regex.lastIndex = 0;
+                
+                let matches = [];
+                let m;
+                while ((m = regex.exec(seg)) !== null) {
+                    matches.push(m);
+                }
+                
+                for (const match of matches) {
+                    locationPart = locationPart.replace(match[0], "");
+                }
+                locationPart = locationPart.replace("(单)", "").replace("(双)", "").trim();
+
+                for (const match of matches) {
+                    const dayChar = match[1];
+                    const startNode = parseInt(match[2]);
+                    const endNode = parseInt(match[3]);
+                    const weekRangeStr = match[4];
+
+                    const dayIdx = WEEKDAY_MAP[dayChar] !== undefined ? WEEKDAY_MAP[dayChar] : 0;
+                    const activeWeeks = parseWeekRanges(weekRangeStr);
+
+                    const filteredWeeks = [];
+                    for (const w of activeWeeks) {
+                        if (w > 0 && w <= maxWeeks) {
+                            if (isOddOnly && w % 2 === 0) continue;
+                            if (isEvenOnly && w % 2 !== 0) continue;
+                            filteredWeeks.push(w);
+                        }
+                    }
+
+                    if (filteredWeeks.length === 0) continue;
+
+                    sessions.push({
+                        day: dayIdx,
+                        start: startNode,
+                        end: endNode,
+                        weeks: filteredWeeks,
+                        location: locationPart
+                    });
+
+                    let segmentMask = 0n;
+                    for (let node = startNode; node <= endNode; node++) {
+                        const bitPos = BigInt((dayIdx * 13) + (node - 1));
+                        segmentMask |= (1n << bitPos);
+                    }
+
+                    for (const w of filteredWeeks) {
+                        semesterSchedule[w] |= segmentMask;
+                    }
+                }
+            }
+
+            return {
+                bitmaps: semesterSchedule.map(x => x.toString()),
+                sessions
+            };
+        };
+
+        const openCustomModalHandler = () => {
+            customForm.name = '';
+            customForm.timeText = '';
+            customForm.comment = '';
+            customForm.color = '#4f46e5';
+            showCustomModal.value = true;
+        };
+
+        const saveCustomSchedule = () => {
+            if (!customForm.name.trim()) return showToast("请输入日程名称", "error");
+            if (!customForm.timeText.trim()) return showToast("请输入时间安排", "error");
+
+            const { bitmaps, sessions } = generateBitmap(customForm.timeText);
+            if (sessions.length === 0) {
+                return showToast("无法解析时间，请检查格式是否正确。例如：周一 1-2节 1-16周", "error");
+            }
+
+            groups.value.push({
+                id: Date.now(),
+                is_custom: true,
+                open: false,
+                candidates: [{
+                    name: customForm.name.trim(),
+                    code: 'custom-' + Date.now(),
+                    teacher: '本人',
+                    location_text: customForm.timeText.trim(),
+                    comment: customForm.comment.trim(),
+                    color: customForm.color,
+                    schedule_bitmaps: bitmaps,
+                    sessions: sessions,
+                    selected: true
+                }],
+                is_skippable: false
+            });
+
+            showCustomModal.value = false;
+            showToast("自定义日程添加成功", "success");
+        };
+
+        const getContrastColor = (hexcolor) => {
+            if (!hexcolor) return '#0d47a1';
+            hexcolor = hexcolor.replace("#", "");
+            if (hexcolor.length === 3) {
+                hexcolor = hexcolor[0] + hexcolor[0] + hexcolor[1] + hexcolor[1] + hexcolor[2] + hexcolor[2];
+            }
+            const r = parseInt(hexcolor.substr(0,2), 16);
+            const g = parseInt(hexcolor.substr(2,2), 16);
+            const b = parseInt(hexcolor.substr(4,2), 16);
+            const yiq = ((r*299)+(g*587)+(b*114))/1000;
+            return (yiq >= 128) ? '#000000' : '#ffffff';
+        };
 
         const openAlternatives = (courseData) => {
             if (!courseData || !courseData.alternatives || courseData.alternatives.length <= 1) return;
@@ -73,6 +246,88 @@ createApp({
         // Expose to window for backend calls
         window.showToast = showToast;
 
+        const handleSearchItemClick = (index, event) => {
+            const visible = filteredSearchResults.value;
+            if (event.shiftKey && lastSearchIdx.value !== -1 && lastSearchIdx.value < visible.length) {
+                const start = Math.min(lastSearchIdx.value, index);
+                const end = Math.max(lastSearchIdx.value, index);
+                const targetState = !visible[index].checked;
+                for (let i = start; i <= end; i++) {
+                    visible[i].checked = targetState;
+                }
+            } else {
+                visible[index].checked = !visible[index].checked;
+            }
+            lastSearchIdx.value = index;
+        };
+
+        const handleGroupItemClick = (groupIdx, cIdx, event) => {
+            const group = groups.value[groupIdx];
+            if (!group) return;
+            const candidates = group.candidates;
+            const groupId = group.id;
+            const lastIdx = lastGroupSelections[groupId] ?? -1;
+
+            if (event.shiftKey && lastIdx !== -1 && lastIdx < candidates.length) {
+                const start = Math.min(lastIdx, cIdx);
+                const end = Math.max(lastIdx, cIdx);
+                const targetState = !candidates[cIdx].selected;
+                for (let i = start; i <= end; i++) {
+                    candidates[i].selected = targetState;
+                }
+            } else {
+                candidates[cIdx].selected = !candidates[cIdx].selected;
+            }
+            lastGroupSelections[groupId] = cIdx;
+        };
+
+        const startDragSearch = (index, event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            isDraggingSearch.value = true;
+            dragStartSearchIdx.value = index;
+            const visible = filteredSearchResults.value;
+            dragTargetStateSearch.value = !visible[index].checked;
+            visible[index].checked = dragTargetStateSearch.value;
+            lastSearchIdx.value = index;
+        };
+
+        const overDragSearch = (index, event) => {
+            if (!isDraggingSearch.value) return;
+            const visible = filteredSearchResults.value;
+            const start = Math.min(dragStartSearchIdx.value, index);
+            const end = Math.max(dragStartSearchIdx.value, index);
+            for (let i = start; i <= end; i++) {
+                visible[i].checked = dragTargetStateSearch.value;
+            }
+        };
+
+        const startDragGroup = (groupIdx, cIdx, event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            isDraggingGroup.value = true;
+            dragStartGroupIdx.value = groupIdx;
+            dragStartGroupCIdx.value = cIdx;
+            const group = groups.value[groupIdx];
+            if (group) {
+                dragTargetStateGroup.value = !group.candidates[cIdx].selected;
+                group.candidates[cIdx].selected = dragTargetStateGroup.value;
+                lastGroupSelections[group.id] = cIdx;
+            }
+        };
+
+        const overDragGroup = (groupIdx, cIdx, event) => {
+            if (!isDraggingGroup.value) return;
+            if (dragStartGroupIdx.value !== groupIdx) return;
+            const group = groups.value[groupIdx];
+            if (!group) return;
+            const start = Math.min(dragStartGroupCIdx.value, cIdx);
+            const end = Math.max(dragStartGroupCIdx.value, cIdx);
+            for (let i = start; i <= end; i++) {
+                group.candidates[i].selected = dragTargetStateGroup.value;
+            }
+        };
+
         const fetchCourses = async (params) => {
             if (window.pywebview) {
                 return await window.pywebview.api.search(params);
@@ -96,6 +351,7 @@ createApp({
                 searchResults.value = res.map(c => ({ ...c, checked: false }));
                 hasSearched.value = true;
                 filterText.value = ''; // Reset filter
+                lastSearchIdx.value = -1; // Reset selection anchor
             } catch (e) {
                 showToast("搜索失败: " + e, 'error');
             } finally {
@@ -109,6 +365,7 @@ createApp({
 
             const allChecked = visible.every(c => c.checked);
             visible.forEach(c => c.checked = !allChecked);
+            lastSearchIdx.value = -1;
         };
 
         const toggleAllDays = (select) => {
@@ -343,7 +600,10 @@ createApp({
                         name: c.name,
                         teacher: c.teacher,
                         location: loc,
-                        alternatives: c.alternatives // passed from solver
+                        alternatives: c.alternatives, // passed from solver
+                        color: c.color || '',
+                        textColor: getContrastColor(c.color),
+                        comment: c.comment || ''
                     };
                 }
             }
@@ -469,6 +729,10 @@ createApp({
 
         onMounted(() => {
             window.addEventListener('keydown', handleKeydown);
+            window.addEventListener('mouseup', () => {
+                isDraggingSearch.value = false;
+                isDraggingGroup.value = false;
+            });
             if (window.pywebview) {
                 init();
             } else {
@@ -485,7 +749,10 @@ createApp({
             toggleSelectAll, toggleAllDays, invertDays,
             showImportModal, importText, isImporting, importStatus, importParams,
             openImportModal, closeImportModal, startBatchImport,
-            showAltModal, currentAltCourse, openAlternatives
+            showAltModal, currentAltCourse, openAlternatives,
+            handleSearchItemClick, handleGroupItemClick,
+            startDragSearch, overDragSearch, startDragGroup, overDragGroup,
+            showCustomModal, customForm, openCustomModalHandler, saveCustomSchedule
         };
     }
 }).mount('#app');

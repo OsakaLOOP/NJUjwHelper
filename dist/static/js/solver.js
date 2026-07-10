@@ -168,6 +168,27 @@ class ScheduleRanker {
             details['优质睡眠'] = -pVal;
         }
 
+        // 6. Compact Half Day (集中半天, 每天仅上午或仅下午+晚上)
+        if (preferences.compact_half_day) {
+            let penalty = 0;
+            for (let w = 1; w <= 25; w++) {
+                const mask = scoringBitmap[w];
+                if (mask === 0n) continue;
+                for (let d = 0; d < 7; d++) {
+                    const dayBits = (mask >> BigInt(d * 13)) & 0x1FFFn;
+                    if (dayBits === 0n) continue;
+                    const hasMorning = (dayBits & 0xFn) !== 0n; // bits 0-3 (nodes 1-4)
+                    const hasAfternoonEvening = (dayBits & 0x1FF0n) !== 0n; // bits 4-12 (nodes 5-13)
+                    if (hasMorning && hasAfternoonEvening) {
+                        penalty += 1;
+                    }
+                }
+            }
+            const pVal = penalty * 2.0;
+            totalPenalty += pVal;
+            details['集中半天'] = -pVal;
+        }
+
         return {
             score: baseScore + totalBonus - totalPenalty,
             details: details

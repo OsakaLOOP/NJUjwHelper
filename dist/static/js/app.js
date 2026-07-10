@@ -1,16 +1,34 @@
-const { createApp, ref, reactive, computed, onMounted } = Vue;
+const { createApp, ref, reactive, computed, onMounted, watch } = Vue;
 
 createApp({
     setup() {
         const currentView = ref('search'); // search, planning, results
         const loading = ref(false);
-        const searchParams = reactive({ name: '', code: '', campus: '1', semester: '2025-2026-2', match_mode: 'OR' });
+        
+        const savedSearchConfig = localStorage.getItem('nju_helper_search_config');
+        let initialMatchMode = 'OR';
+        let initialCampus = '1';
+        if (savedSearchConfig) {
+            try {
+                const config = JSON.parse(savedSearchConfig);
+                if (config.match_mode) initialMatchMode = config.match_mode;
+                if (config.campus) initialCampus = config.campus;
+            } catch (e) {
+                console.error("Failed to load search config", e);
+            }
+        }
+        const searchParams = reactive({ name: '', code: '', campus: initialCampus, semester: '2026-2027-1', match_mode: initialMatchMode });
+        
+        watch(() => [searchParams.match_mode, searchParams.campus], ([mode, campus]) => {
+            localStorage.setItem('nju_helper_search_config', JSON.stringify({ match_mode: mode, campus: campus }));
+        });
         const searchResults = ref([]);
         const groups = ref([]);
         const preferences = reactive({
             avoid_early_morning: false,
             avoid_weekend: false,
             quality_sleep: false, // Avoid 9-13
+            compact_half_day: false,
             compactness: 'none',
             day_max_limit_enabled: false,
             day_max_limit_value: 0,
@@ -20,27 +38,426 @@ createApp({
         const filterText = ref('');
         const hasSearched = ref(false);
 
+        const expandedSearchGroups = reactive({});
+        const expandedGroupCandidates = reactive({});
+
+        const normalizeCode = (code) => (code || '').trim().replace(/[A-Za-z]+$/, '');
+
+        const isFreeTime = (course) => !!(course && course.location_text && course.location_text.includes('自由时间'));
+
+        const getCombinedCode = (courses, normCode) => {
+            if (!courses || courses.length === 0) return normCode;
+            const suffixes = Array.from(new Set(courses.map(c => (c.code || '').trim().slice(normCode.length))))
+                .filter(s => s !== undefined && s !== null)
+                .sort();
+            
+            if (suffixes.length === 1 && suffixes[0] === '') {
+                return normCode;
+            }
+            
+            const hasEmpty = suffixes.includes('');
+            const nonEmpty = suffixes.filter(Boolean);
+            
+            if (hasEmpty) {
+                return normCode + '/' + nonEmpty.join('/');
+            } else {
+                return normCode + nonEmpty.join('/');
+            }
+        };
+
+        const parseCourseTime = (locationText) => {
+            if (!locationText) return "未知时间";
+            const regexCh = /周([一二三四五六日天])\s*(\d+)-(\d+)节/g;
+            const segments = locationText.split(/[,;]/);
+            const parsedSlots = [];
+            
+            for (const seg of segments) {
+                const isOdd = seg.includes("(单)");
+                const isEven = seg.includes("(双)");
+                
+                regexCh.lastIndex = 0;
+                let m = regexCh.exec(seg);
+                if (m !== null) {
+                    parsedSlots.push({
+                        weekday: m[1],
+                        start: m[2],
+                        end: m[3],
+                        isOdd: isOdd,
+                        isEven: isEven
+                    });
+                    while ((m = regexCh.exec(seg)) !== null) {
+                        parsedSlots.push({
+                            weekday: m[1],
+                            start: m[2],
+                            end: m[3],
+                            isOdd: isOdd,
+                            isEven: isEven
+                        });
+                    }
+                } else {
+                    if (parsedSlots.length > 0) {
+                        const lastSlot = parsedSlots[parsedSlots.length - 1];
+                        if (isOdd) lastSlot.isOdd = true;
+                        if (isEven) lastSlot.isEven = true;
+                    }
+                }
+            }
+            
+            const times = parsedSlots.map(s => {
+                const suffix = s.isOdd ? '(单)' : (s.isEven ? '(双)' : '');
+                return `周${s.weekday} ${s.start}-${s.end}节${suffix}`;
+            });
+            const uniqueTimes = Array.from(new Set(times));
+            return uniqueTimes.length > 0 ? uniqueTimes.join(', ') : "未知时间";
+        };
+
+        const groupedSearchResults = computed(() => {
+            const list = filteredSearchResults.value;
+            const groupsMap = new Map();
+            list.forEach((c, index) => {
+                const normCode = normalizeCode(c.code);
+                const key = c.name + '|' + normCode;
+                if (!groupsMap.has(key)) {
+                    groupsMap.set(key, {
+                        id: key,
+                        name: c.name,
+                        code: normCode,
+                        courses: []
+                    });
+                }
+                c._originalIndex = index;
+                groupsMap.get(key).courses.push(c);
+            });
+
+            return Array.from(groupsMap.values()).map(g => {
+                const allChecked = g.courses.every(c => c.checked);
+                const someChecked = g.courses.some(c => c.checked);
+                
+                const pairs = g.courses.map(c => {
+                    const time = parseCourseTime(c.location_text);
+                    return `${c.teacher || '无老师'}(${time})`;
+                });
+                const uniquePairs = Array.from(new Set(pairs));
+                const pairsSummary = uniquePairs.slice(0, 3).join(', ') + (uniquePairs.length > 3 ? '...' : '');
+                
+                const combinedCode = getCombinedCode(g.courses, g.code);
+                
+                return {
+                    id: g.id,
+                    name: g.name,
+                    code: combinedCode,
+                    courses: g.courses,
+                    checked: allChecked,
+                    indeterminate: someChecked && !allChecked,
+                    pairsSummary,
+                    expanded: !!expandedSearchGroups[g.id]
+                };
+            });
+        });
+
+        const lastSearchGroupIdx = ref(-1);
+
+        const toggleSearchGroup = (groupId, event) => {
+            const list = groupedSearchResults.value;
+            const index = list.findIndex(g => g.id === groupId);
+            if (index === -1) return;
+            
+            const group = list[index];
+            const nonFreeCourses = group.courses.filter(c => !isFreeTime(c));
+            if (nonFreeCourses.length === 0) return;
+            
+            const targetState = !group.checked;
+            
+            if (event && event.shiftKey && lastSearchGroupIdx.value !== -1 && lastSearchGroupIdx.value < list.length) {
+                const start = Math.min(lastSearchGroupIdx.value, index);
+                const end = Math.max(lastSearchGroupIdx.value, index);
+                for (let i = start; i <= end; i++) {
+                    list[i].courses.forEach(c => {
+                        if (!isFreeTime(c)) {
+                            c.checked = targetState;
+                        }
+                    });
+                }
+            } else {
+                nonFreeCourses.forEach(c => {
+                    c.checked = targetState;
+                });
+            }
+            lastSearchGroupIdx.value = index;
+        };
+
+        const toggleSearchGroupExpand = (groupId) => {
+            expandedSearchGroups[groupId] = !expandedSearchGroups[groupId];
+        };
+
+        const getGroupedCandidates = (group, groupIndex) => {
+            const groupsMap = new Map();
+            group.candidates.forEach((c, index) => {
+                const normCode = normalizeCode(c.code);
+                const key = c.name + '|' + normCode;
+                if (!groupsMap.has(key)) {
+                    groupsMap.set(key, {
+                        id: group.id + '|' + key,
+                        name: c.name,
+                        code: normCode,
+                        courses: []
+                    });
+                }
+                c._originalIndex = index;
+                groupsMap.get(key).courses.push(c);
+            });
+
+            return Array.from(groupsMap.values()).map(g => {
+                const allChecked = g.courses.every(c => c.selected);
+                const someChecked = g.courses.some(c => c.selected);
+                
+                const pairs = g.courses.map(c => {
+                    const time = parseCourseTime(c.location_text);
+                    return `${c.teacher || '无老师'}(${time})`;
+                });
+                const uniquePairs = Array.from(new Set(pairs));
+                const pairsSummary = uniquePairs.slice(0, 3).join(', ') + (uniquePairs.length > 3 ? '...' : '');
+                
+                const combinedCode = getCombinedCode(g.courses, g.code);
+                
+                return {
+                    id: g.id,
+                    name: g.name,
+                    code: combinedCode,
+                    courses: g.courses,
+                    checked: allChecked,
+                    indeterminate: someChecked && !allChecked,
+                    pairsSummary,
+                    expanded: !!expandedGroupCandidates[g.id]
+                };
+            });
+        };
+
+        const lastGroupCandidateIdx = reactive({});
+
+        const toggleGroupCandidateSelect = (group, groupIndex, cardId, event) => {
+            const list = getGroupedCandidates(group, groupIndex);
+            const index = list.findIndex(g => g.id === cardId);
+            if (index === -1) return;
+            
+            const card = list[index];
+            const targetState = !card.checked;
+            
+            const lastIdx = lastGroupCandidateIdx[group.id] ?? -1;
+            
+            if (event && event.shiftKey && lastIdx !== -1 && lastIdx < list.length) {
+                const start = Math.min(lastIdx, index);
+                const end = Math.max(lastIdx, index);
+                for (let i = start; i <= end; i++) {
+                    list[i].courses.forEach(c => {
+                        c.selected = targetState;
+                    });
+                }
+            } else {
+                card.courses.forEach(c => {
+                    c.selected = targetState;
+                });
+            }
+            lastGroupCandidateIdx[group.id] = index;
+        };
+
+        const toggleGroupCandidateExpand = (cardId) => {
+            expandedGroupCandidates[cardId] = !expandedGroupCandidates[cardId];
+        };
+
         const schedules = ref([]);
         const totalCount = ref(0);
         const currentScheduleIdx = ref(0);
         const currentWeek = ref(1);
-        const showAllWeeks = ref(false);
+        const showAllWeeks = ref(true);
         const toastRef = ref(null);
 
         // Selection State
         const lastSearchIdx = ref(-1);
         const lastGroupSelections = reactive({}); // Map groupId -> index
 
+        const isDraggingSearch = ref(false);
+        const dragStartSearchIdx = ref(-1);
+        const dragTargetStateSearch = ref(false);
+
+        const isDraggingGroup = ref(false);
+        const dragStartGroupIdx = ref(-1);
+        const dragStartGroupCIdx = ref(-1);
+        const dragTargetStateGroup = ref(false);
+
         // Import Modal State
         const showImportModal = ref(false);
         const importText = ref('');
         const isImporting = ref(false);
         const importStatus = ref('');
-        const importParams = reactive({ semester: '2025-2026-2', campus: '1' });
+        const importParams = reactive({ semester: '2026-2027-1', campus: '1' });
 
         // Alternatives Modal
         const showAltModal = ref(false);
         const currentAltCourse = ref(null);
+
+        // Custom Schedule States
+        const showCustomModal = ref(false);
+        const customForm = reactive({
+            name: '',
+            timeText: '',
+            comment: '',
+            color: '#4f46e5'
+        });
+
+        const WEEKDAY_MAP = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4, "六": 5, "日": 6, "天": 6};
+
+        const parseWeekRanges = (weekStr) => {
+            const weeks = new Set();
+            const parts = weekStr.split(',');
+            for (const part of parts) {
+                if (part.includes('-')) {
+                    try {
+                        const [s, e] = part.split('-').map(Number);
+                        for (let w = s; w <= e; w++) {
+                            weeks.add(w);
+                        }
+                    } catch (e) {}
+                } else {
+                    try {
+                        const w = parseInt(part);
+                        if (!isNaN(w)) weeks.add(w);
+                    } catch (e) {}
+                }
+            }
+            return Array.from(weeks).sort((a, b) => a - b);
+        };
+
+        const generateBitmap = (locationText, maxWeeks = 25) => {
+            const semesterSchedule = Array(maxWeeks + 1).fill(0n);
+            const sessions = [];
+            if (!locationText) {
+                return {
+                    bitmaps: semesterSchedule.map(x => x.toString()),
+                    sessions
+                };
+            }
+
+            const regex = /周([a-zA-Z0-9\u4e00-\u9fa5\u9fbb\u3007\u4e00-\u9fa5])\s*(\d+)-(\d+)节\s*([0-9,-]+)周/g;
+            // 注意: WEEKDAY_MAP 里面支持中文的一二三四五六日天，我们直接使用中文正则
+            const regexCh = /周([一二三四五六日天])\s*(\d+)-(\d+)节\s*([0-9,-]+)周/g;
+            const segments = locationText.split(/[,;]/);
+
+            for (const seg of segments) {
+                const isOddOnly = seg.includes("(单)");
+                const isEvenOnly = seg.includes("(双)");
+                
+                let locationPart = seg;
+                regexCh.lastIndex = 0;
+                
+                let matches = [];
+                let m;
+                while ((m = regexCh.exec(seg)) !== null) {
+                    matches.push(m);
+                }
+                
+                for (const match of matches) {
+                    locationPart = locationPart.replace(match[0], "");
+                }
+                locationPart = locationPart.replace("(单)", "").replace("(双)", "").trim();
+
+                for (const match of matches) {
+                    const dayChar = match[1];
+                    const startNode = parseInt(match[2]);
+                    const endNode = parseInt(match[3]);
+                    const weekRangeStr = match[4];
+
+                    const dayIdx = WEEKDAY_MAP[dayChar] !== undefined ? WEEKDAY_MAP[dayChar] : 0;
+                    const activeWeeks = parseWeekRanges(weekRangeStr);
+
+                    const filteredWeeks = [];
+                    for (const w of activeWeeks) {
+                        if (w > 0 && w <= maxWeeks) {
+                            if (isOddOnly && w % 2 === 0) continue;
+                            if (isEvenOnly && w % 2 !== 0) continue;
+                            filteredWeeks.push(w);
+                        }
+                    }
+
+                    if (filteredWeeks.length === 0) continue;
+
+                    sessions.push({
+                        day: dayIdx,
+                        start: startNode,
+                        end: endNode,
+                        weeks: filteredWeeks,
+                        location: locationPart
+                    });
+
+                    let segmentMask = 0n;
+                    for (let node = startNode; node <= endNode; node++) {
+                        const bitPos = BigInt((dayIdx * 13) + (node - 1));
+                        segmentMask |= (1n << bitPos);
+                    }
+
+                    for (const w of filteredWeeks) {
+                        semesterSchedule[w] |= segmentMask;
+                    }
+                }
+            }
+
+            return {
+                bitmaps: semesterSchedule.map(x => x.toString()),
+                sessions
+            };
+        };
+
+        const openCustomModalHandler = () => {
+            customForm.name = '';
+            customForm.timeText = '';
+            customForm.comment = '';
+            customForm.color = '#4f46e5';
+            showCustomModal.value = true;
+        };
+
+        const saveCustomSchedule = () => {
+            if (!customForm.name.trim()) return showToast("请输入日程名称", "error");
+            if (!customForm.timeText.trim()) return showToast("请输入时间安排", "error");
+
+            const { bitmaps, sessions } = generateBitmap(customForm.timeText);
+            if (sessions.length === 0) {
+                return showToast("无法解析时间，请检查格式是否正确。例如：周一 1-2节 1-16周", "error");
+            }
+
+            groups.value.push({
+                id: Date.now(),
+                is_custom: true,
+                open: false,
+                candidates: [{
+                    name: customForm.name.trim(),
+                    code: 'custom-' + Date.now(),
+                    teacher: '本人',
+                    location_text: customForm.timeText.trim(),
+                    comment: customForm.comment.trim(),
+                    color: customForm.color,
+                    schedule_bitmaps: bitmaps,
+                    sessions: sessions,
+                    selected: true
+                }],
+                is_skippable: false
+            });
+
+            showCustomModal.value = false;
+            showToast("自定义日程添加成功", "success");
+        };
+
+        const getContrastColor = (hexcolor) => {
+            if (!hexcolor) return '#0d47a1';
+            hexcolor = hexcolor.replace("#", "");
+            if (hexcolor.length === 3) {
+                hexcolor = hexcolor[0] + hexcolor[0] + hexcolor[1] + hexcolor[1] + hexcolor[2] + hexcolor[2];
+            }
+            const r = parseInt(hexcolor.substr(0,2), 16);
+            const g = parseInt(hexcolor.substr(2,2), 16);
+            const b = parseInt(hexcolor.substr(4,2), 16);
+            const yiq = ((r*299)+(g*587)+(b*114))/1000;
+            return (yiq >= 128) ? '#000000' : '#ffffff';
+        };
 
         const openAlternatives = (courseData) => {
             if (!courseData || !courseData.alternatives || courseData.alternatives.length <= 1) return;
@@ -119,24 +536,29 @@ createApp({
             const visible = filteredSearchResults.value;
             if (visible.length === 0) return;
 
-            const allChecked = visible.every(c => c.checked);
-            visible.forEach(c => c.checked = !allChecked);
+            const nonFree = visible.filter(c => !isFreeTime(c));
+            if (nonFree.length === 0) return;
+
+            const allChecked = nonFree.every(c => c.checked);
+            nonFree.forEach(c => c.checked = !allChecked);
             lastSearchIdx.value = -1;
         };
 
         const handleSearchItemClick = (index, event) => {
             const visible = filteredSearchResults.value;
+            const course = visible[index];
+            if (isFreeTime(course)) return;
+
             // Handle Shift+Click Range
             if (event.shiftKey && lastSearchIdx.value !== -1 && lastSearchIdx.value < visible.length) {
                 const start = Math.min(lastSearchIdx.value, index);
                 const end = Math.max(lastSearchIdx.value, index);
-                const targetState = !visible[index].checked; // Determine target state based on the clicked item's PRE-CLICK state (which is !checked)
-                // Actually, if we use @click.prevent, the value hasn't changed yet.
-                // If it's currently checked, we are unchecking it.
-                // So targetState should be opposite of current state.
+                const targetState = !visible[index].checked; 
 
                 for (let i = start; i <= end; i++) {
-                    visible[i].checked = targetState;
+                    if (!isFreeTime(visible[i])) {
+                        visible[i].checked = targetState;
+                    }
                 }
             } else {
                 // Normal toggle
@@ -156,7 +578,6 @@ createApp({
             if (event.shiftKey && lastIdx !== -1 && lastIdx < candidates.length) {
                 const start = Math.min(lastIdx, itemIndex);
                 const end = Math.max(lastIdx, itemIndex);
-                // Same logic: toggle based on clicked item
                 const targetState = !candidates[itemIndex].selected;
                 for (let i = start; i <= end; i++) {
                     candidates[i].selected = targetState;
@@ -165,6 +586,61 @@ createApp({
                 candidates[itemIndex].selected = !candidates[itemIndex].selected;
             }
             lastGroupSelections[groupId] = itemIndex;
+        };
+
+        const startDragSearch = (index, event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            isDraggingSearch.value = true;
+            dragStartSearchIdx.value = index;
+            dragTargetStateSearch.value = null; // Determine target state on move
+            lastSearchIdx.value = index;
+        };
+
+        const overDragSearch = (index, event) => {
+            if (!isDraggingSearch.value) return;
+            const visible = filteredSearchResults.value;
+            const startIdx = dragStartSearchIdx.value;
+            
+            if (dragTargetStateSearch.value === null) {
+                dragTargetStateSearch.value = !visible[startIdx].checked;
+            }
+            
+            const start = Math.min(startIdx, index);
+            const end = Math.max(startIdx, index);
+            for (let i = start; i <= end; i++) {
+                visible[i].checked = dragTargetStateSearch.value;
+            }
+        };
+
+        const startDragGroup = (groupIdx, cIdx, event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            isDraggingGroup.value = true;
+            dragStartGroupIdx.value = groupIdx;
+            dragStartGroupCIdx.value = cIdx;
+            dragTargetStateGroup.value = null; // Determine target state on move
+            const group = groups.value[groupIdx];
+            if (group) {
+                lastGroupSelections[group.id] = cIdx;
+            }
+        };
+
+        const overDragGroup = (groupIdx, cIdx, event) => {
+            if (!isDraggingGroup.value) return;
+            if (dragStartGroupIdx.value !== groupIdx) return;
+            const group = groups.value[groupIdx];
+            if (!group) return;
+            
+            if (dragTargetStateGroup.value === null) {
+                dragTargetStateGroup.value = !group.candidates[dragStartGroupCIdx.value].selected;
+            }
+            
+            const start = Math.min(dragStartGroupCIdx.value, cIdx);
+            const end = Math.max(dragStartGroupCIdx.value, cIdx);
+            for (let i = start; i <= end; i++) {
+                group.candidates[i].selected = dragTargetStateGroup.value;
+            }
         };
 
         const toggleAllDays = (select) => {
@@ -301,6 +777,9 @@ createApp({
 
             end: (e) => {
                 if (longPressTimer) clearTimeout(longPressTimer);
+                if (touchState.dragging) {
+                    if (e && e.cancelable) e.preventDefault();
+                }
                 touchState.dragging = false;
                 touchState.scrollSpeed = 0;
                 if (touchState.autoScrollTimer) cancelAnimationFrame(touchState.autoScrollTimer);
@@ -507,8 +986,17 @@ createApp({
                 return;
             }
 
-            // Copy all search results, map checked to selected
-            const candidates = searchResults.value.map(c => ({
+            // Grouping key: name + '|' + normalizeCode(code)
+            const checkedKeys = new Set(selectedInSearch.map(c => c.name + '|' + normalizeCode(c.code)));
+
+            // Filter search results to only keep courses belonging to the same cards as checked ones
+            const filteredResults = searchResults.value.filter(c => {
+                const key = c.name + '|' + normalizeCode(c.code);
+                return checkedKeys.has(key);
+            });
+
+            // Copy filtered results, mapping checked to selected
+            const candidates = filteredResults.map(c => ({
                 ...c,
                 selected: c.checked
             }));
@@ -604,7 +1092,10 @@ createApp({
                         location: loc,
                         alternatives: c.alternatives,
                         isCurrent: true,
-                        is_skippable: !!c.is_skippable // Pass to view
+                        is_skippable: !!c.is_skippable, // Pass to view
+                        color: c.color || '',
+                        textColor: getContrastColor(c.color),
+                        comment: c.comment || ''
                     };
                 }
             }
@@ -628,13 +1119,14 @@ createApp({
                                 location: sess.location,
                                 alternatives: c.alternatives,
                                 isCurrent: false, // Gray out
-                                is_skippable: !!c.is_skippable
-                            };
+                                is_skippable: !!c.is_skippable,
+                                color: c.color || '',
+                                textColor: getContrastColor(c.color),
+                                comment: c.comment || ''
+                             };
                         }
                     }
-
-                    // Fallback: scan all bitmaps (heavy but necessary if no sessions)
-                    // Skip if sessions existed but didn't match (already handled above)
+                    
                     if (!c.sessions && c.schedule_bitmaps) {
                          for(let w=1; w<c.schedule_bitmaps.length; w++) {
                              let wm = 0n;
@@ -647,7 +1139,10 @@ createApp({
                                     location: c.location_text, // Raw text fallback
                                     alternatives: c.alternatives,
                                     isCurrent: false,
-                                    is_skippable: !!c.is_skippable
+                                    is_skippable: !!c.is_skippable,
+                                    color: c.color || '',
+                                    textColor: getContrastColor(c.color),
+                                    comment: c.comment || ''
                                  };
                              }
                          }
@@ -761,6 +1256,10 @@ createApp({
 
         onMounted(() => {
             window.addEventListener('keydown', handleKeydown);
+            window.addEventListener('mouseup', () => {
+                isDraggingSearch.value = false;
+                isDraggingGroup.value = false;
+            });
             init();
         });
 
@@ -776,7 +1275,12 @@ createApp({
             showAltModal, currentAltCourse, openAlternatives,
             showAllWeeks,
             handleSearchItemClick, handleGroupItemClick,
-            touchManager, touchState
+            touchManager, touchState,
+            startDragSearch, overDragSearch, startDragGroup, overDragGroup,
+            showCustomModal, customForm, openCustomModalHandler, saveCustomSchedule,
+            groupedSearchResults, expandedSearchGroups, expandedGroupCandidates,
+            toggleSearchGroup, toggleSearchGroupExpand, getGroupedCandidates,
+            toggleGroupCandidateSelect, toggleGroupCandidateExpand
         };
     }
 }).mount('#app');

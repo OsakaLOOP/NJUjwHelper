@@ -3,7 +3,7 @@ export async function onRequest({ request, env, event }) {
     const params = url.searchParams;
 
     const campus = params.get('campus') || '1';
-    const semester = params.get('semester') || '2025-2026-2';
+    const semester = params.get('semester') || '2026-2027-1';
 
     const datasetKey = `nju_courses_${campus}_${semester.split('-').join('')}`;
     const filenameKey = `nju_courses_${campus}_${semester}`;

@@ -51,11 +51,27 @@ def test_logic():
 
     # 2. Generate Schedules (from orig groups)
     # Possible: A+C, A+B(X), B+C, B+B(X) -> Valid: A+C, B+C.
-    schedules = ScheduleSolver.generate_schedules(groups)
+    schedules, total_count = ScheduleSolver.generate_schedules(groups)
+    assert total_count == 2, f"Expected 2 total schedules, got {total_count}"
     assert len(schedules) == 2, f"Expected 2 schedules, got {len(schedules)}"
     names = ["+".join([c['name'] for c in s]) for s in schedules]
     assert "A+C" in names and "B+C" in names
     print("    [+] Generation OK")
+
+    # 2b. Duplicate course names in separate groups are still separate required
+    # scheduling units. They must not be merged away by name.
+    lab_1 = {'name': '实验', 'teacher': '甲', 'schedule_bitmaps': [0, mask_a], 'selected': True}
+    lab_2 = {'name': '实验', 'teacher': '乙', 'schedule_bitmaps': [0, mask_c], 'selected': True}
+    duplicate_name_groups = [
+        {'id': 5, 'candidates': [lab_1]},
+        {'id': 6, 'candidates': [lab_2]},
+    ]
+    duplicate_schedules, duplicate_total = ScheduleSolver.generate_schedules(duplicate_name_groups)
+    assert duplicate_total == 1, f"Expected 1 duplicate-name schedule, got {duplicate_total}"
+    assert len(duplicate_schedules[0]) == 2, "Duplicate-name groups must both appear in the schedule"
+    teachers = {c['teacher'] for c in duplicate_schedules[0]}
+    assert teachers == {'甲', '乙'}, f"Expected both duplicate-name courses, got {teachers}"
+    print("    [+] Duplicate-name required groups OK")
 
     # 3. Ranking
     # A+C (Mon 1-4). B+C (Mon 1-4).

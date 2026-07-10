@@ -4,6 +4,25 @@ from .ranker import ScheduleRanker
 
 class ScheduleSolver:
     @staticmethod
+    def _get_active_candidates(group):
+        """Return candidates selected for scheduling.
+
+        The current UI stores a boolean `selected` flag on each candidate. Older
+        tests/session data may store `selected_indices` on the group, so keep
+        that as a compatibility fallback.
+        """
+        candidates = group.get('candidates', [])
+        if any('selected' in c for c in candidates):
+            return [c for c in candidates if c.get('selected', False)]
+
+        selected_indices = group.get('selected_indices')
+        if selected_indices is not None:
+            selected_set = set(selected_indices)
+            return [c for idx, c in enumerate(candidates) if idx in selected_set]
+
+        return []
+
+    @staticmethod
     def check_conflicts(groups):
         """
         Checks for definite conflicts between groups.
@@ -21,8 +40,8 @@ class ScheduleSolver:
                 group_b = groups[j]
 
                 # Get active candidates
-                cands_a = [c for c in group_a['candidates'] if c.get('selected', False)]
-                cands_b = [c for c in group_b['candidates'] if c.get('selected', False)]
+                cands_a = ScheduleSolver._get_active_candidates(group_a)
+                cands_b = ScheduleSolver._get_active_candidates(group_b)
 
                 if not cands_a or not cands_b:
                     continue # Empty group cannot conflict
@@ -103,49 +122,17 @@ class ScheduleSolver:
         if preferences is None:
             preferences = {}
 
-        # 0. Preprocess: Merge Groups with Identical Name (First candidate's name)
-        # This handles cases where user accidentally has 2 groups for "Phys Lab".
-        merged_groups_map = {} # Key: Course Name -> Group Data
-
-        for g in groups:
-            candidates = g.get('candidates', [])
-            if not candidates:
-                continue
-
-            # Use the first candidate's name as the Group Identifier
-            # (Assuming all candidates in a group belong to the same 'Course Name' broadly)
-            course_name = candidates[0].get('name')
-            if not course_name:
-                 # Fallback if name missing, just use ID or keep separate
-                 course_name = f"__ID_{g.get('id')}__"
-
-            if course_name not in merged_groups_map:
-                # Initialize with this group structure
-                # Deep copy candidates to avoid mutating original
-                merged_groups_map[course_name] = {
-                    'id': g.get('id'),
-                    'candidates': [c for c in candidates if c.get('selected', False)] # Only active
-                }
-            else:
-                # Merge candidates
-                existing = merged_groups_map[course_name]
-                new_active = [c for c in candidates if c.get('selected', False)]
-                # Avoid duplicates in candidate list?
-                # Candidates are dicts.
-                # Let's just append for now, Meta-Candidate step will cluster by time anyway.
-                existing['candidates'].extend(new_active)
-
-        # Convert back to list
-        processed_groups = list(merged_groups_map.values())
-
-        # 1. Preprocess: Filter active and Cluster by Bitmap (Meta-Candidates)
+        # 1. Preprocess: Filter active candidates and cluster alternatives by
+        # bitmap only inside the same group. Do not merge groups by course name:
+        # every group selected by the user is a mandatory scheduling unit and
+        # must produce one visible course in the final result.
         meta_groups = []
-        for g in processed_groups:
-            active = g['candidates']
+        for g in groups:
+            active = ScheduleSolver._get_active_candidates(g)
             if not active:
                 # If a group has NO active candidates after merge, it's a dead end.
                 # "I need one choice per group". If 0 choices, invalid.
-                return []
+                return [], 0
 
             # Cluster by unique bitmap content
             clusters = {}
